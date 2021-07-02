@@ -26,10 +26,10 @@ class HighD(data.Dataset):
             self.input_edge_types.append(input_edge_types)
             self.pred_seqs.append(pred_seq)
 
-        self.input_seqs = torch.stack(self.input_seqs).float().to(device).squeeze()
-        self.input_masks = torch.stack(self.input_masks).float().to(device).squeeze()
-        self.input_edge_types = torch.stack(self.input_edge_types).float().to(device).squeeze()
-        self.pred_seqs = torch.stack(self.pred_seqs).float().to(device).squeeze()
+        self.input_seqs = torch.cat(self.input_seqs).float().to(device).squeeze()
+        self.input_masks = torch.cat(self.input_masks).float().to(device).squeeze()
+        self.input_edge_types = torch.cat(self.input_edge_types).float().to(device).squeeze()
+        self.pred_seqs = torch.cat(self.pred_seqs).float().to(device).squeeze()
 
     def __getitem__(self, idx):
 

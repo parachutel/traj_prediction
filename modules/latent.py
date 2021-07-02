@@ -8,8 +8,7 @@ def all_one_hot_combinations(N, K):
 
 class DiscreteLatent(nn.Module):
     def __init__(self, 
-                 xy_hidden_size,
-                 x_hidden_size,
+                 latent_input_size=128,
                  pred_dim=2, 
                  latent_dim=5,
                  kl_min=0.07, 
@@ -23,17 +22,19 @@ class DiscreteLatent(nn.Module):
 
         self.temp = None            # filled in by MultimodalGenerativeCVAE.set_annealing_params
         self.z_logit_clip = None    # filled in by MultimodalGenerativeCVAE.set_annealing_params
-        self.p_dist = None          # filled in by MultimodalGenerativeCVAE.encoder
-        self.q_dist = None          # filled in by MultimodalGenerativeCVAE.encoder
+        self.p_dist = None
+        self.q_dist = None
 
-        self.xy_to_latent = nn.Linear(xy_hidden_size, self.z_dim)
-        self.x_to_latent = nn.Linear(x_hidden_size, self.z_dim)
+        # self.xy_to_latent = nn.Linear(x_size + y_size, self.z_dim)
+        # self.x_to_latent = nn.Linear(x_size, self.z_dim)
+
+        self.xy_to_latent = nn.Linear(latent_input_size, self.z_dim)
+        self.x_to_latent = nn.Linear(latent_input_size, self.z_dim)
 
         self.device = device
 
 
     def z_dist_from_hidden(self, h, mode):
-        # h.shape
         logits_separated = h.reshape(-1, self.N, self.K)
         logits_separated_mean_zero = logits_separated - torch.mean(logits_separated, dim=-1, keepdim=True)
         if self.z_logit_clip is not None and mode == 'training':
@@ -50,6 +51,7 @@ class DiscreteLatent(nn.Module):
 
     def sample_q(self, k, mode):
         '''
+            k is the number of samples
             Not used for prediction
         '''
         if mode == 'training':
@@ -57,13 +59,14 @@ class DiscreteLatent(nn.Module):
             z_NK = z_dist.rsample((k, ))
         elif mode == 'eval':
             z_NK = self.q_dist.sample((k, ))
-        return torch.reshape(z_NK, (k, -1, self.z_dim))
+        return z_NK.reshape(k, -1, self.z_dim) # (n_samples, bs, z_dim)
 
 
     def sample_p(self, k, mode, most_likely=False):
         if mode == 'predict' and self.K ** self.N < 100 and k == 0:
             bs = self.p_dist.probs.size()[0]
-            z_NK = torch.from_numpy(all_one_hot_combinations(self.N, self.K)).to(self.device).repeat(1, bs)
+            z_NK = torch.from_numpy(
+                all_one_hot_combinations(self.N, self.K)).to(self.device).repeat(1, bs)
             k = self.K ** self.N
 
         elif most_likely:
@@ -75,12 +78,12 @@ class DiscreteLatent(nn.Module):
         else:
             z_NK = self.p_dist.sample((k, ))
 
-        return torch.reshape(z_NK, (k, -1, self.N * self.K))
+        return z_NK.reshape(k, -1, self.z_dim) # self.N * self.K
 
 
     def kl_q_p(self):
         kl_separated = td.kl_divergence(self.q_dist, self.p_dist)
-        if len(kl_separated.size()) < 2:
+        if len(kl_separated.shape) < 2:
             kl_separated = torch.unsqueeze(kl_separated, dim=0)
             
         kl_minibatch = torch.mean(kl_separated, dim=0, keepdim=True)

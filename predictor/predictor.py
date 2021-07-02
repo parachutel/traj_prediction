@@ -1,74 +1,202 @@
 import torch
 import torch.nn as nn
-import nn.functional as F
+import torch.nn.functional as F
+import numpy as np
 
-from modules.encoders import Encoders
-from modules.latent import DiscreteLatent
+from modules.encoders import Encoder
 from modules.decoder import Decoder
+from modules.latent import all_one_hot_combinations
+
+from model_utils.annealer import *
+
+from args import args
+
 
 
 class Predictor(nn.Module):
-    def __init__(self):
+    def __init__(self, 
+                 state_dim=args.state_dim,
+                 rel_state_dim=args.state_dim,
+                 pred_dim=args.pred_dim,
+                 edge_type_dim=args.n_edge_types,
+                 nhe_hidden_size=args.nhe_hidden_size,
+                 ehe_hidden_size=args.ehe_hidden_size,
+                 nfe_hidden_size=args.nfe_hidden_size,
+                 decoder_hidden_size=args.decoder_hidden_size,
+                 gmm_components=args.gmm_components,
+                 log_sigma_min=args.log_sigma_min,
+                 log_sigma_max=args.log_sigma_max,
+                 log_p_yt_xz_max=args.log_p_yt_xz_max,
+                 kl_weight=args.kl_weight,
+                 device='cpu'):
+
         super().__init__()
-        self.encoders = Encoders(state_dim=state_dim,
-                                 rel_state_dim=rel_state_dim,
-                                 edge_type_dim=edge_type_dim,
-                                 nhe_hidden_size=nhe_hidden_size,
-                                 ehe_hidden_size=ehe_hidden_size,
-                                 nfe_hidden_size=nfe_hidden_size,
-                                 device=device)
-        self.latent = DiscreteLatent()
-        self.decoder = Decoder()
+        
+        self.encoder = Encoder(state_dim=state_dim,
+                               rel_state_dim=rel_state_dim,
+                               edge_type_dim=edge_type_dim,
+                               nhe_hidden_size=nhe_hidden_size,
+                               ehe_hidden_size=ehe_hidden_size,
+                               nfe_hidden_size=nfe_hidden_size,
+                               device=device)
+        
+        self.decoder = Decoder(x_size=self.encoder.x_size,
+                               z_size=self.encoder.latent.z_dim,
+                               pred_dim=pred_dim,
+                               decoder_hidden_size=decoder_hidden_size,
+                               gmm_components=gmm_components,
+                               log_sigma_min=log_sigma_min,
+                               log_sigma_max=log_sigma_max,
+                               log_p_yt_xz_max=log_p_yt_xz_max,
+                               device=device)
+
+        self.kl_weight = kl_weight
 
         self.device = device
 
-    def q_z_xy(self, x, y):
-        xy = torch.cat([x, y], dim=1)
-        # print('q_z_xy/xy', xy)
+        self.schedulers = []
+        self.dummy_optimizers = []
+        self.annealed_var_names = []
+        self.setup_hyperparams_annealing()
 
-        if self.hyperparams['q_z_xy_MLP_dims'] is not None:
-            dense = self.node_modules[self.node.type + '/q_z_xy']
-            h = F.dropout(F.relu(dense(xy)), 
-                          p=1.-self.hyperparams['MLP_dropout_keep_prob'],
-                          training=(mode == ModeKeys.TRAIN))
+
+    def setup_hyperparams_annealing(self):
+        create_scheduler(self,
+            'kl_weight',
+            annealer=sigmoid_anneal, 
+            annealer_kws={
+               'start': args.kl_weight_start,
+               'finish': args.kl_weight,
+               'center_step': args.kl_crossover,
+               'steps_lo_to_hi': args.kl_crossover / args.kl_sigmoid_divisor
+            },
+            creation_condition=(np.abs(args.alpha - 1.0) < 1e-3 and not args.use_iwae)
+        )
+
+        create_scheduler(self,
+            'decoder.decoding_sample_model_prob',
+            annealer=sigmoid_anneal, 
+            annealer_kws={
+               'start': args.dec_sample_model_prob_start,
+               'finish': args.dec_sample_model_prob_final,
+               'center_step': args.dec_sample_model_prob_crossover,
+               'steps_lo_to_hi': args.dec_sample_model_prob_crossover / args.dec_sample_model_prob_divisor
+            },
+            creation_condition=args.sample_model_during_dec
+        )
+
+        create_scheduler(self,
+            'encoder.latent.temp',
+            annealer=exp_anneal, 
+            annealer_kws={
+                'start': args.temp_init,
+                'finish': args.temp_final,
+                'rate': args.temp_decay_rate
+            }
+        )
+
+        create_scheduler(self,
+            'encoder.latent.z_logit_clip',
+            annealer=sigmoid_anneal,
+            annealer_kws={
+               'start': args.z_logit_clip_start,
+               'finish': args.z_logit_clip_final,
+               'center_step': args.z_logit_clip_crossover,
+               'steps_lo_to_hi': args.z_logit_clip_crossover / args.z_logit_clip_divisor
+            },
+            creation_condition=args.use_z_logit_clipping
+        )
+
+    def step_annealers(self, tbx, step):
+        for var_name, scheduler, dummy_optimizer \
+            in zip(self.annealed_var_names, self.schedulers, self.dummy_optimizers):
+            if scheduler is not None:
+                scheduler.step()
+                annealed_var = dummy_optimizer.param_groups[0]['lr']
+                rsetattr(self, var_name, annealed_var)
+
+                tbx.add_scalar('hyper_params/' + var_name, annealed_var.item(), step)
+
+
+    def get_training_loss(self, input_seq, input_edge_types, pred_seq):
+        mode = 'training'
+
+        x, y = self.encoder(input_seq, input_edge_types, pred_seq, mode)
+        z, kl = self.encoder.get_z_and_kl_qp(x, y, mode)
+
+        log_p_y_xz = self.decoder.log_p_y_xz(x, z, args.n_z_samples_training, input_seq, pred_seq,
+            mode=mode, sample_model_during_decoding=args.sample_model_during_dec) # (bs, pred_dim)
+
+        if np.abs(args.alpha - 1.0) < 1e-3 and not args.use_iwae:
+            log_p_y_xz_mean = torch.mean(log_p_y_xz, dim=0) # (pred_dim,)
+            log_likelihood = torch.mean(log_p_y_xz_mean) # (1,)
+            ELBO = log_likelihood - self.kl_weight * kl
+            loss = -ELBO
 
         else:
-            h = xy
+            log_q_z_xy = self.encoder.latent.q_log_prob(z)
+            log_p_z_x = self.encoder.latent.p_log_prob(z)
+            a = args.alpha
+            log_pp_over_q = log_p_y_xz + log_p_z_x - log_q_z_xy
+            log_likelihood = (torch.mean(torch.logsumexp(log_pp_over_q * (1. - a), dim=0)) - \
+                              torch.log(args.n_z_samples_training)) / (1. - a)
+            loss = -log_likelihood
 
-        to_latent = self.node_modules[self.node.type + '/hxy_to_z']
-        return self.latent.dist_from_h(to_latent(h), mode)
-
-    def p_z_x(self, x):
-        if self.hyperparams['p_z_x_MLP_dims'] is not None:
-            dense = self.node_modules[self.node.type + '/p_z_x']
-            h = F.dropout(F.relu(dense(x)),
-                          p=1.-self.hyperparams['MLP_dropout_keep_prob'],
-                          training=(mode == ModeKeys.TRAIN))
-
-        else:
-            h = x
-
-        to_latent = self.node_modules[self.node.type + '/hx_to_z']
-        return self.latent.dist_from_h(to_latent(h), mode)
-
-
-    def get_latent(self, x, y):
-        self.latent.q_dist = self.q_z_xy(x, y)
-        self.latent.p_dist = self.p_z_x(x)
-
-        z = self.latent.sample_q(self.num_latent_samples)
-
-        if self.training and self.kl_exact:
-            kl_obj = self.latent.kl_q_p()
-        else:
-            kl_obj = None
-
-        return z, kl_obj
-
-
-    
-    def get_training_loss(self):
         return loss
 
-    def get_eval_loss(self):
-        return loss
+    def get_eval_loss(self, input_seq, input_edge_types, pred_seq,
+                      compute_naive=True,
+                      compute_exact=True):
+        mode = 'eval'
+
+        x, y = self.encoder(input_seq, input_edge_types, pred_seq, mode)
+
+        ### Importance sampled NLL estimate
+        z, _ = self.encoder.get_z_and_kl_qp(x, y, mode)
+        log_p_y_xz = self.decoder.log_p_y_xz(x, z, args.n_z_samples_eval, input_seq, pred_seq, mode)
+        log_q_z_xy = self.encoder.latent.q_log_prob(z)
+        log_p_z_x = self.encoder.latent.p_log_prob(z)
+        log_likelihood = torch.mean(torch.logsumexp(log_p_y_xz + log_p_z_x - log_q_z_xy, dim=0)) - \
+                         torch.log(torch.tensor(
+                                args.n_z_samples_eval, dtype=torch.float, device=self.device))
+        nll_q_is = -log_likelihood
+
+        ### Naive sampled NLL estimate
+        nll_p = torch.tensor(np.nan)
+        if compute_naive:
+            z = self.encoder.latent.sample_p(args.n_z_samples_eval, mode, most_likely=False)
+            log_p_y_xz = self.decoder.log_p_y_xz(x, z, args.n_z_samples_eval, input_seq, pred_seq, mode)
+            log_likelihood_p = torch.mean(torch.logsumexp(log_p_y_xz, dim=0)) - \
+                               torch.log(torch.tensor(
+                                    args.n_z_samples_eval, dtype=torch.float, device=self.device))
+            nll_p = -log_likelihood_p
+
+        ### Exact NLL
+        nll_exact = torch.tensor(np.nan)
+        if compute_exact:
+            K, N = args.pred_dim, args.latent_dim
+            n_z_samples = K ** N
+            if n_z_samples < 50:
+                nbs = x.shape[0]
+                z_raw = torch.from_numpy(
+                        all_one_hot_combinations(N, K).astype(np.float32)
+                    ).to(self.device).repeat(1, nbs)
+                z = z_raw.reshape(n_z_samples, -1, N * K)
+                log_p_y_xz = self.decoder.log_p_y_xz(x, z, n_z_samples, input_seq, pred_seq, mode)
+                log_p_z_x = self.encoder.latent.p_log_prob(z)
+                exact_log_likelihood = torch.mean(torch.logsumexp(log_p_y_xz + log_p_z_x, dim=0))
+                nll_exact = -exact_log_likelihood
+
+        return nll_q_is, nll_p, nll_exact
+
+
+    def predict(self, input_seqs, input_edge_types, num_samples, most_likely=False):
+        mode = 'predict'
+
+        x = self.encoder(input_seqs, input_edge_types, pred_seqs=None, mode=mode)
+        self.encoder.latent.p_dist = self.encoder.p_z_x(x, mode)
+        z_p_samples = self.encoder.latent.sample_p(num_samples, mode, most_likely=most_likely)
+        y_dist, sampled_future = self.decoder.p_y_xz(x, z_p_samples, num_samples, input_seqs, 
+                                                     n_pred_steps=args.n_pred_steps,
+                                                     mode=mode)
+        return sampled_future, z_p_samples

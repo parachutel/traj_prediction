@@ -1,7 +1,8 @@
 import numpy as np
 
 import torch
-from torch.distributions as Categorical
+import torch.nn as nn
+from torch.distributions import Categorical
 
 def to_one_hot(labels, n_labels, device):
     return torch.eye(n_labels, device=device)[labels]
