@@ -79,9 +79,12 @@ def main(args):
     
     # Get data loader
     log.info('Building dataset...')
-    train_data_list = [2, 3]
-    dev_data_list = [1]
-    # Dataset is on CPU first to safe VRAM
+    n_total_data_files = len(args.data_list)
+    n_train_data_files = int(0.75 * n_total_data_files)
+    random.shuffle(args.data_list)
+    train_data_list = args.data_list[:n_train_data_files]
+    dev_data_list = args.data_list[n_train_data_files:]
+    # Dataset is on CPU first to save VRAM
     train_loader = build_highd_data_loader(train_data_list, args.train_batch_size)
     dev_loader = build_highd_data_loader(dev_data_list, args.eval_batch_size)
 

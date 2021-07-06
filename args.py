@@ -35,11 +35,11 @@ def get_args():
                         help='Whether maximize or minimize the metric')
     parser.add_argument('--train_batch_size',
                         type=int,
-                        default=128,
+                        default=512,
                         help='The batch size during training')
     parser.add_argument('--eval_batch_size',
                         type=int,
-                        default=64,
+                        default=256,
                         help='The batch size during eval')
     parser.add_argument('--num_epochs',
                         type=int,
@@ -72,6 +72,9 @@ def get_args():
                         type=int,
                         default=20,
                         help='The number of trajecories to visualize.')
+    # Dataset
+    parser.add_argument('--data_list', nargs='+', type=int)
+
     # Dataset features
     parser.add_argument('--state_dim',
                         type=int,
@@ -93,12 +96,12 @@ def get_args():
     parser.add_argument('--input_seconds',
                         type=int,
                         default=4,
-                        help='The number of seconds of input sequence length.')
+                        help='The number of seconds of input trajectories.')
     parser.add_argument('--pred_seconds',
                         type=int,
                         default=2,
-                        help='The number of seconds of prediction sequence length.')
-    ## process_highd.py
+                        help='The number of seconds of prediction trajectories.')
+    ## process_highd.py (to be renamed more clearly)
     parser.add_argument('--mode', default='pickle', type=str)
     parser.add_argument('--n_records', default=60, type=int)
     parser.add_argument('--fps', default=20, type=int)
@@ -267,10 +270,10 @@ def get_args():
                         default=False,
                         help='Whether print debug info.')
 
-    
-
-
     args = parser.parse_args()
+    
+    args.data_list = list(range(1, 21)) + list(range(41, 61))
+
     return args
 
 args = get_args()
