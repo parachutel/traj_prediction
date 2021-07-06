@@ -63,8 +63,7 @@ def main(args):
 
     log.info('Building dataset...')
     test_data_list = [1]
-    test_loader = build_highd_data_loader(
-        test_data_list, args.eval_batch_size, device=device)
+    test_loader = build_highd_data_loader(test_data_list, args.eval_batch_size)
     dataset_size = len(test_loader.dataset)
     log.info(f'Test dataset size = {dataset_size}')
 

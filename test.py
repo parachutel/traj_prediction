@@ -8,7 +8,7 @@ device='cpu'
 # Load data:
 dataset_list = [1]
 batch_size = 64
-data_loader = build_highd_data_loader(dataset_list, batch_size, device=device)
+data_loader = build_highd_data_loader(dataset_list, batch_size)
 
 
 predictor = Predictor()

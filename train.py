@@ -81,10 +81,9 @@ def main(args):
     log.info('Building dataset...')
     train_data_list = [2, 3]
     dev_data_list = [1]
-    train_loader = build_highd_data_loader(
-        train_data_list, args.train_batch_size, device=device)
-    dev_loader = build_highd_data_loader(
-        dev_data_list, args.eval_batch_size, device=device)
+    # Dataset is on CPU first to safe VRAM
+    train_loader = build_highd_data_loader(train_data_list, args.train_batch_size)
+    dev_loader = build_highd_data_loader(dev_data_list, args.eval_batch_size)
 
 
     # Train
@@ -99,6 +98,11 @@ def main(args):
         with torch.enable_grad(), tqdm(total=len(train_loader.dataset)) as progress_bar:
             # One epoch:
             for input_seq, _, input_edge_types, pred_seq in train_loader:
+                # Move to GPU if needed
+                input_seq = input_seq.to(device)
+                input_edge_types = input_edge_types.to(device)
+                pred_seq = pred_seq.to(device)
+
                 batch_size = input_seq.size(0)
                 optimizer.zero_grad()
 

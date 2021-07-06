@@ -12,7 +12,7 @@ TORCH_TENSOR_PATH = current_file_path + \
     '/../data/processed_data/highd/input={}_pred={}_stride={}/{}_{}.pt'
 
 class HighD(data.Dataset):
-    def __init__(self, input_seq_paths, input_masks_paths, input_edge_types_paths, pred_seq_paths, device='cpu'):
+    def __init__(self, input_seq_paths, input_masks_paths, input_edge_types_paths, pred_seq_paths):
         super().__init__()
 
         print('Building HighD dataset...')
@@ -33,10 +33,10 @@ class HighD(data.Dataset):
             self.input_edge_types.append(input_edge_types)
             self.pred_seqs.append(pred_seq)
 
-        self.input_seqs = torch.cat(self.input_seqs).float().to(device).squeeze()
-        self.input_masks = torch.cat(self.input_masks).float().to(device).squeeze()
-        self.input_edge_types = torch.cat(self.input_edge_types).float().to(device).squeeze()
-        self.pred_seqs = torch.cat(self.pred_seqs).float().to(device).squeeze()
+        self.input_seqs = torch.cat(self.input_seqs).float().squeeze()
+        self.input_masks = torch.cat(self.input_masks).float().squeeze()
+        self.input_edge_types = torch.cat(self.input_edge_types).float().squeeze()
+        self.pred_seqs = torch.cat(self.pred_seqs).float().squeeze()
 
     def __getitem__(self, idx):
 
@@ -50,7 +50,7 @@ class HighD(data.Dataset):
     def __len__(self):
         return len(self.input_seqs)
 
-def build_highd_data_loader(one_indexed_dataset_list, batch_size=100, device='cpu'):
+def build_highd_data_loader(one_indexed_dataset_list, batch_size=100):
     input_seq_paths = []
     input_masks_paths = []
     input_edge_types_paths = []
@@ -68,7 +68,7 @@ def build_highd_data_loader(one_indexed_dataset_list, batch_size=100, device='cp
             args.input_seconds, args.pred_seconds, args.forward_shift_seconds, data_str, 'pred_seq'))
 
     dataset = HighD(input_seq_paths, input_masks_paths, input_edge_types_paths, 
-                    pred_seq_paths, device=device)
+                    pred_seq_paths)
 
     data_loader = data.DataLoader(dataset,
                                   batch_size=batch_size,
@@ -83,7 +83,7 @@ if __name__ == '__main__':
     dataset_list = [1, 2, 16]
     batch_size = 64
 
-    data_loader = build_highd_data_loader(dataset_list, batch_size, device='cpu')
+    data_loader = build_highd_data_loader(dataset_list, batch_size)
     
     for input_seq, input_masks, input_edge_types, pred_seq in data_loader:
         print(input_seq.shape) # (bs, in_seq_len, grid, grid, feat_dim)
