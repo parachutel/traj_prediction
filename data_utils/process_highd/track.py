@@ -1,4 +1,4 @@
-from .data_management.read_csv import *
+from data_management.read_csv import *
 import numpy as np
 import torch
 
