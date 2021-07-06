@@ -22,17 +22,6 @@ PROCESSED_DATASET_PATH = '../../data/processed_data/highd/{}_uuid_to_track.pickl
 ANIMATION_PATH = '../../data/processed_data/highd/{}_{}_fps={}_animation.mp4'
 TORCH_TENSOR_DIR = '../../data/processed_data/highd/input={}_pred={}_stride={}'
 
-def create_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--mode', default='pickle', type=str)
-    parser.add_argument('--n_records', default=60, type=int)
-    parser.add_argument('--fps', default=20, type=int)
-    parser.add_argument('--dataset_id', default=1, type=int)
-    parser.add_argument('--track_id', default=58, type=int)
-    parser.add_argument('--start', default=1, type=int)
-    parser.add_argument('--end', default=60, type=int)
-    return parser.parse_args()
-
 def load_highd_data(n_records):
     for data_id in tqdm(range(1, n_records + 1)):
         data_str = '{:02d}'.format(data_id)
@@ -240,8 +229,7 @@ def generate_training_data_segments(dataset_list=None):
         torch.save(pred_seq_seqments, torch_tensor_path.format(data_str, 'pred_seq'))
 
 if __name__ == '__main__':
-    args = create_args()
-
+    
     if args.mode == 'pickle':
         load_highd_data(args.n_records)
     elif args.mode == 'animation':

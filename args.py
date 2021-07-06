@@ -98,6 +98,14 @@ def get_args():
                         type=int,
                         default=2,
                         help='The number of seconds of prediction sequence length.')
+    ## process_highd.py
+    parser.add_argument('--mode', default='pickle', type=str)
+    parser.add_argument('--n_records', default=60, type=int)
+    parser.add_argument('--fps', default=20, type=int)
+    parser.add_argument('--dataset_id', default=1, type=int)
+    parser.add_argument('--track_id', default=58, type=int)
+    parser.add_argument('--start', default=1, type=int)
+    parser.add_argument('--end', default=60, type=int)
 
     # Network Meta
     parser.add_argument('--mlp_dropout_prob',
