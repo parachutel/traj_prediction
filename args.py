@@ -64,7 +64,14 @@ def get_args():
     parser.add_argument('--learning_decay_rate',
                         type=float,
                         default=0.9999)
-
+    parser.add_argument('--pred_id',
+                        type=int,
+                        default=0,
+                        help='The track ID to predict (manual visualization).')
+    parser.add_argument('--n_vis',
+                        type=int,
+                        default=20,
+                        help='The number of trajecories to visualize.')
     # Dataset features
     parser.add_argument('--state_dim',
                         type=int,
@@ -78,6 +85,19 @@ def get_args():
                         type=int,
                         default=4,
                         help='The number of different types of vehicle interactions.')
+    ## Data preparing
+    parser.add_argument('--forward_shift_seconds',
+                        type=int,
+                        default=2,
+                        help='The number of seconds to shift when picking data segments.')
+    parser.add_argument('--input_seconds',
+                        type=int,
+                        default=4,
+                        help='The number of seconds of input sequence length.')
+    parser.add_argument('--pred_seconds',
+                        type=int,
+                        default=2,
+                        help='The number of seconds of prediction sequence length.')
 
     # Network Meta
     parser.add_argument('--mlp_dropout_prob',
@@ -219,6 +239,10 @@ def get_args():
                         type=int,
                         default=50,
                         help='The number of samples of latent variable during eval.')
+    parser.add_argument('--n_z_samples_pred',
+                        type=int,
+                        default=10,
+                        help='The number of samples of latent variable during prediction.')
     parser.add_argument('--use_iwae',
                         type=lambda s: s.lower().startswith('t'),
                         default=False,

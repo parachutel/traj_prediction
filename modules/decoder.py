@@ -47,14 +47,14 @@ class Decoder(nn.Module):
 
         if pred_seqs is not None:
             n_pred_steps = pred_seqs.shape[1]
-            tgt_future = pred_seqs[:, :, 1, 1, :2] # (x, y), (bs, pred_seq_len, pred_dim)
+            tgt_future = pred_seqs[:, :, 1, 1, 2:4] # (x_dot, y_dot), (bs, pred_seq_len, pred_dim)
 
         z = z_stacked.reshape(-1, z_stacked.shape[-1]) # (bs * n_z_samples, z_dim)
         zx = torch.cat([z, x.repeat(n_z_samples, 1)], dim=1) # (bs * n_z_samples, z_dim + x_dim)
         initial_state = (self.initial_h(zx), self.initial_c(zx)) # (bs * n_z_samples, decoder_hidden_size)
 
         rnn_state = initial_state # hidden 
-        tgt_prediction_present = input_seqs[:, -1, 1, 1, :2] # (x, y)
+        tgt_prediction_present = input_seqs[:, -1, 1, 1, 2:4] # (x_dot, y_dot)
         # x, y (idx 0 and 1) of target traj (grid 1, 1) at current step (t=-1 of input_seqs), (bs, pred_dim)
         input_ = torch.cat([zx, tgt_prediction_present.repeat(n_z_samples, 1)], dim=-1)
         # (bs * n_z_samples, z_dim + x_dim + pred_dim)
@@ -155,7 +155,7 @@ class Decoder(nn.Module):
                              sample_model_during_decoding=sample_model_during_decoding)
         # y_dist.sample (n_z_samples, bs, n_pred_steps, pred_dim)
         # True target future
-        true_tgt_future = pred_seqs[:, :, 1, 1, :2] # (x, y), (bs, n_pred_steps, 2)
+        true_tgt_future = pred_seqs[:, :, 1, 1, 2:4] # (x_dot, y_dot), (bs, n_pred_steps, 2)
         log_p_yt_xz = torch.clamp(y_dist.log_prob(true_tgt_future), max=self.log_p_yt_xz_max)
         log_p_y_xz = log_p_yt_xz.sum(dim=2) # sum through time dimension, (bs, 2)
         return log_p_y_xz

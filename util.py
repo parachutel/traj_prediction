@@ -28,6 +28,9 @@ def get_save_dir(args, training, name=None, id_max=100):
         name = '_'.join([
             '{}'.format(args.name),
             'bs={}'.format(args.train_batch_size),
+            'input={}'.format(args.input_seconds),
+            'pred={}'.format(args.pred_seconds),
+            'stride={}'.format(args.forward_shift_seconds),
             'seed={}'.format(args.seed),
             'run',
         ])

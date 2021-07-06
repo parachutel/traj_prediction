@@ -1,18 +1,28 @@
-from data_management.read_csv import *
+from .data_management.read_csv import *
 import numpy as np
 import torch
 
+import os
+import sys
+
+current_file_path = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_file_path + '/../../')
+
+from args import args
+
+
 DEFAULT_FRAME_RATE = 25 # hz
-FORWARD_SHIFT_STRIDE = DEFAULT_FRAME_RATE * 2
-INPUT_SEQ_LEN = DEFAULT_FRAME_RATE * 4
-PRED_SEQ_LEN = DEFAULT_FRAME_RATE * 2
+FORWARD_SHIFT_STRIDE = DEFAULT_FRAME_RATE * args.forward_shift_seconds
+INPUT_SEQ_LEN = DEFAULT_FRAME_RATE * args.input_seconds
+PRED_SEQ_LEN = DEFAULT_FRAME_RATE * args.pred_seconds
 TOTAL_SEQ_LEN = INPUT_SEQ_LEN + PRED_SEQ_LEN
 MIN_NUM_FRAMES = TOTAL_SEQ_LEN
 
 # Approximate emprical bounds from highD for normalizing data to (0, 1)
 MIN_X = 0
 MAX_X = 420
-# y is normalized by lane_width / 2
+# y is normalized by LANE_WIDTH
+LANE_WIDTH = 4
 MIN_ABS_VEL_X = 30
 MAX_ABS_VEL_X = 50
 MIN_ABS_VEL_Y = 0
@@ -47,6 +57,9 @@ NEIGHBOR_IDX_TO_COORDS = {
 
 def normalize(x, min_val, max_val):
     return (x - min_val) / (max_val - min_val)
+
+def denormalize(x, min_val, max_val):
+    return x * (max_val - min_val) + min_val
 
 
 class Track:
@@ -122,15 +135,16 @@ class Track:
         if self.driving_direction == 1:
             y_lane_center = np.mean([self.upper_lane_markings[lane_id - 2],
                                      self.upper_lane_markings[lane_id - 1]])
-            self.lane_width = self.upper_lane_markings[lane_id - 1] \
-                - self.upper_lane_markings[lane_id - 2]
+            # self.lane_width = self.upper_lane_markings[lane_id - 1] \
+            #     - self.upper_lane_markings[lane_id - 2]
         else:
             y_lane_center = np.mean(
                 [self.lower_lane_markings[lane_id - n_upper_lane_markings - 2],
                  self.lower_lane_markings[lane_id - n_upper_lane_markings - 1]])
-            self.lane_width = self.lower_lane_markings[lane_id - n_upper_lane_markings - 1] \
-                - self.lower_lane_markings[lane_id - n_upper_lane_markings - 2]
+            # self.lane_width = self.lower_lane_markings[lane_id - n_upper_lane_markings - 1] \
+            #     - self.lower_lane_markings[lane_id - n_upper_lane_markings - 2]
 
+        self.lane_width = LANE_WIDTH
         self.y_lane_center = y_lane_center
 
 

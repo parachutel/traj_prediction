@@ -12,10 +12,15 @@ from matplotlib.animation import FFMpegFileWriter
 
 import matplotlib.pyplot as plt
 
+current_file_path = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_file_path + '/../../')
+
+from args import args
+
 RAW_DATASET_PATH = '../../data/raw_data/highd/data/'
 PROCESSED_DATASET_PATH = '../../data/processed_data/highd/{}_uuid_to_track.pickle'
 ANIMATION_PATH = '../../data/processed_data/highd/{}_{}_fps={}_animation.mp4'
-TORCH_TENSOR_PATH = '../../data/processed_data/highd/{}_{}.pt'
+TORCH_TENSOR_PATH = '../../data/processed_data/highd/input={}_pred={}_stride={}/{}_{}.pt'
 
 def create_args():
     parser = argparse.ArgumentParser()
@@ -223,10 +228,14 @@ def generate_training_data_segments(dataset_list=None):
         input_edge_types_segments = torch.tensor(input_edge_types_segments).float()
         pred_seq_seqments = torch.tensor(pred_seq_seqments).float()
 
-        torch.save(input_seq_segments, TORCH_TENSOR_PATH.format(data_str, 'input_seq'))
-        torch.save(input_masks_segments, TORCH_TENSOR_PATH.format(data_str, 'input_masks'))
-        torch.save(input_edge_types_segments, TORCH_TENSOR_PATH.format(data_str, 'input_edge_types'))
-        torch.save(pred_seq_seqments, TORCH_TENSOR_PATH.format(data_str, 'pred_seq'))
+        torch.save(input_seq_segments, TORCH_TENSOR_PATH.format(
+            args.input_seconds, args.pred_seconds, args.forward_shift_seconds, data_str, 'input_seq'))
+        torch.save(input_masks_segments, TORCH_TENSOR_PATH.format(
+            args.input_seconds, args.pred_seconds, args.forward_shift_seconds, data_str, 'input_masks'))
+        torch.save(input_edge_types_segments, TORCH_TENSOR_PATH.format(
+            args.input_seconds, args.pred_seconds, args.forward_shift_seconds, data_str, 'input_edge_types'))
+        torch.save(pred_seq_seqments, TORCH_TENSOR_PATH.format(
+            args.input_seconds, args.pred_seconds, args.forward_shift_seconds, data_str, 'pred_seq'))
 
 if __name__ == '__main__':
     args = create_args()

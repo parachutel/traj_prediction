@@ -12,6 +12,7 @@ import torch.optim as optim
 import torch.optim.lr_scheduler as sched
 
 from predictor.predictor import Predictor
+from model_utils.annealer import step_annealers
 
 from data_utils.highd_dataset import build_highd_data_loader
 import util
@@ -24,6 +25,7 @@ def main(args):
     tbx = SummaryWriter(args.save_dir)
     device, args.gpu_ids = util.get_available_devices()
     # device, args.gpu_ids = 'cpu', None
+    log.info(f'Using device {device}...')
     log.info(f'Args: {dumps(vars(args), indent=4, sort_keys=True)}')
 
     # Set random seed
@@ -112,7 +114,7 @@ def main(args):
                 step += batch_size
                 # Step hyperparam schedulers
                 lr_scheduler.step()
-                model.step_annealers(tbx, step)
+                step_annealers(model, tbx, step)
 
                 # Log info
                 progress_bar.update(batch_size)
@@ -128,7 +130,7 @@ def main(args):
             epochs_till_eval = args.eval_epochs
             # Evaluate and save checkpoint
             log.info(f'Evaluating at epoch {epoch}...')
-            results = evaluate(model, dev_loader, device)
+            results = evaluate(model, dev_loader)
             saver.save(epoch, model, results[args.metric_name], device)
             # Log to console
             results_str = ', '.join(f'{k}: {v:05.2f}' for k, v in results.items())
@@ -139,7 +141,7 @@ def main(args):
             tbx.add_scalar('eval/nll_exact', results['nll_exact'], step)
 
 
-def evaluate(model, data_loader, device):
+def evaluate(model, data_loader):
     model.eval()
     nll_q_is_meter = util.AverageMeter()
     nll_p_meter = util.AverageMeter()

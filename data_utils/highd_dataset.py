@@ -1,8 +1,15 @@
 import torch
 import torch.utils.data as data
 import os
-file_path = os.path.dirname(os.path.abspath(__file__))
-TORCH_TENSOR_PATH = file_path + '/../data/processed_data/highd/{}_{}.pt'
+import sys
+
+current_file_path = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_file_path + '/../')
+
+from args import args
+
+TORCH_TENSOR_PATH = current_file_path + \
+    '/../data/processed_data/highd/input={}_pred={}_stride={}/{}_{}.pt'
 
 class HighD(data.Dataset):
     def __init__(self, input_seq_paths, input_masks_paths, input_edge_types_paths, pred_seq_paths, device='cpu'):
@@ -51,10 +58,14 @@ def build_highd_data_loader(one_indexed_dataset_list, batch_size=100, device='cp
 
     for data_id in one_indexed_dataset_list:
         data_str = '{:02d}'.format(data_id)
-        input_seq_paths.append(TORCH_TENSOR_PATH.format(data_str, 'input_seq'))
-        input_masks_paths.append(TORCH_TENSOR_PATH.format(data_str, 'input_masks'))
-        input_edge_types_paths.append(TORCH_TENSOR_PATH.format(data_str, 'input_edge_types'))
-        pred_seq_paths.append(TORCH_TENSOR_PATH.format(data_str, 'pred_seq'))
+        input_seq_paths.append(TORCH_TENSOR_PATH.format(
+            args.input_seconds, args.pred_seconds, args.forward_shift_seconds, data_str, 'input_seq'))
+        input_masks_paths.append(TORCH_TENSOR_PATH.format(
+            args.input_seconds, args.pred_seconds, args.forward_shift_seconds, data_str, 'input_masks'))
+        input_edge_types_paths.append(TORCH_TENSOR_PATH.format(
+            args.input_seconds, args.pred_seconds, args.forward_shift_seconds, data_str, 'input_edge_types'))
+        pred_seq_paths.append(TORCH_TENSOR_PATH.format(
+            args.input_seconds, args.pred_seconds, args.forward_shift_seconds, data_str, 'pred_seq'))
 
     dataset = HighD(input_seq_paths, input_masks_paths, input_edge_types_paths, 
                     pred_seq_paths, device=device)

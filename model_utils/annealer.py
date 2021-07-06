@@ -1,7 +1,8 @@
 import torch
 import torch.optim as optim
-
 import functools
+
+from args import args
 
 def exp_anneal(anneal_kws):
     device = anneal_kws['device']
@@ -61,3 +62,57 @@ def create_scheduler(model, var_name, annealer, annealer_kws,
     model.dummy_optimizers.append(dummy_optimizer)
     model.schedulers.append(value_scheduler)
     model.annealed_var_names.append(var_name)
+
+
+def setup_hyperparams_annealing(model):
+    create_scheduler(model,
+        'kl_weight',
+        annealer=sigmoid_anneal, 
+        annealer_kws={
+           'start': args.kl_weight_start,
+           'finish': args.kl_weight,
+           'center_step': args.kl_crossover,
+           'steps_lo_to_hi': args.kl_crossover / args.kl_sigmoid_divisor
+        },
+        creation_condition=(abs(args.alpha - 1.0) < 1e-3 and not args.use_iwae)
+    )
+    create_scheduler(model,
+        'decoder.decoding_sample_model_prob',
+        annealer=sigmoid_anneal, 
+        annealer_kws={
+           'start': args.dec_sample_model_prob_start,
+           'finish': args.dec_sample_model_prob_final,
+           'center_step': args.dec_sample_model_prob_crossover,
+           'steps_lo_to_hi': args.dec_sample_model_prob_crossover / args.dec_sample_model_prob_divisor
+        },
+        creation_condition=args.sample_model_during_dec
+    )
+    create_scheduler(model,
+        'encoder.latent.temp',
+        annealer=exp_anneal, 
+        annealer_kws={
+            'start': args.temp_init,
+            'finish': args.temp_final,
+            'rate': args.temp_decay_rate
+        }
+    )
+    create_scheduler(model,
+        'encoder.latent.z_logit_clip',
+        annealer=sigmoid_anneal,
+        annealer_kws={
+           'start': args.z_logit_clip_start,
+           'finish': args.z_logit_clip_final,
+           'center_step': args.z_logit_clip_crossover,
+           'steps_lo_to_hi': args.z_logit_clip_crossover / args.z_logit_clip_divisor
+        },
+        creation_condition=args.use_z_logit_clipping
+    )
+
+def step_annealers(model, tbx, step):
+    for var_name, scheduler, dummy_optimizer \
+        in zip(model.annealed_var_names, model.schedulers, model.dummy_optimizers):
+        if scheduler is not None:
+            scheduler.step()
+            annealed_var = dummy_optimizer.param_groups[0]['lr']
+            rsetattr(model, var_name, annealed_var)
+            tbx.add_scalar('hyper_params/' + var_name, annealed_var.item(), step)
