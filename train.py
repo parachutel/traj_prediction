@@ -81,14 +81,14 @@ def main(args):
     log.info('Building dataset...')
     n_total_data_files = len(args.data_list)
     n_train_data_files = int(0.75 * n_total_data_files)
-    log.info(f'Training set size = {n_train_data_files}')
-    log.info(f'Dev set size = {n_total_data_files - n_train_data_files}')
     random.shuffle(args.data_list)
     train_data_list = args.data_list[:n_train_data_files]
     dev_data_list = args.data_list[n_train_data_files:]
     # Dataset is on CPU first to save VRAM
     train_loader = build_highd_data_loader(train_data_list, args.train_batch_size)
     dev_loader = build_highd_data_loader(dev_data_list, args.eval_batch_size)
+    log.info(f'Training set size = {len(train_loader.dataset)}')
+    log.info(f'Dev set size = {len(dev_loader.dataset)}')
 
 
     # Train
@@ -159,6 +159,11 @@ def evaluate(model, data_loader):
     with torch.no_grad(), \
             tqdm(total=len(data_loader.dataset)) as progress_bar:
         for input_seq, _, input_edge_types, pred_seq in data_loader:
+            # Move to GPU if needed
+            input_seq = input_seq.to(device)
+            input_edge_types = input_edge_types.to(device)
+            pred_seq = pred_seq.to(device)
+            
             batch_size = input_seq.size(0)
             # Forward
             nll_q_is, nll_p, nll_exact = \
