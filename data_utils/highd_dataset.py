@@ -14,8 +14,6 @@ TORCH_TENSOR_PATH = current_file_path + \
 class HighD(data.Dataset):
     def __init__(self, input_seq_paths, input_masks_paths, input_edge_types_paths, pred_seq_paths):
         super().__init__()
-
-        print('Building HighD dataset...')
         
         self.input_seqs = []
         self.input_masks = []

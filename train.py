@@ -81,6 +81,8 @@ def main(args):
     log.info('Building dataset...')
     n_total_data_files = len(args.data_list)
     n_train_data_files = int(0.75 * n_total_data_files)
+    log.info(f'Training set size = {n_train_data_files}')
+    log.info(f'Dev set size = {n_total_data_files - n_train_data_files}')
     random.shuffle(args.data_list)
     train_data_list = args.data_list[:n_train_data_files]
     dev_data_list = args.data_list[n_train_data_files:]
