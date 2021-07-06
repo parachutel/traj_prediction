@@ -139,7 +139,7 @@ def main(args):
             epochs_till_eval = args.eval_epochs
             # Evaluate and save checkpoint
             log.info(f'Evaluating at epoch {epoch}...')
-            results = evaluate(model, dev_loader)
+            results = evaluate(model, dev_loader, device)
             saver.save(epoch, model, results[args.metric_name], device)
             # Log to console
             results_str = ', '.join(f'{k}: {v:05.2f}' for k, v in results.items())
@@ -150,7 +150,7 @@ def main(args):
             tbx.add_scalar('eval/nll_exact', results['nll_exact'], step)
 
 
-def evaluate(model, data_loader):
+def evaluate(model, data_loader, device):
     model.eval()
     nll_q_is_meter = util.AverageMeter()
     nll_p_meter = util.AverageMeter()
@@ -163,7 +163,7 @@ def evaluate(model, data_loader):
             input_seq = input_seq.to(device)
             input_edge_types = input_edge_types.to(device)
             pred_seq = pred_seq.to(device)
-            
+
             batch_size = input_seq.size(0)
             # Forward
             nll_q_is, nll_p, nll_exact = \
