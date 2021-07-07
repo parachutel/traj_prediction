@@ -84,6 +84,8 @@ def main(args):
     random.shuffle(args.data_list)
     train_data_list = args.data_list[:n_train_data_files]
     dev_data_list = args.data_list[n_train_data_files:]
+    log.info('train_data_list =', train_data_list)
+    log.info('dev_data_list =', dev_data_list)
     # Dataset is on CPU first to save VRAM
     train_loader = build_highd_data_loader(train_data_list, args.train_batch_size)
     dev_loader = build_highd_data_loader(dev_data_list, args.eval_batch_size)
