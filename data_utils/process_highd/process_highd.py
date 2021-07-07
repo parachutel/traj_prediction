@@ -104,9 +104,9 @@ def update_frame(i, ax, track, data_str, target_traj, neighbor_trajs, x_reversed
     # Trajectories
     _target_traj = np.array(target_traj)
     ax.plot(_target_traj[:, 0], _target_traj[:, 1], color='b', linewidth=1)
-    for n_uuid in neighbor_trajs:
-        _n_traj = np.array(neighbor_trajs[n_uuid])
-        ax.plot(_n_traj[:, 0], _n_traj[:, 1], color='r', linewidth=1)
+    # for n_uuid in neighbor_trajs:
+    #     _n_traj = np.array(neighbor_trajs[n_uuid])
+    #     ax.plot(_n_traj[:, 0], _n_traj[:, 1], color='r', linewidth=1)
 
 def plot_one_tracks(data_id=1, track_id=1, fps=5):
     data_str = '{:02d}'.format(data_id)
