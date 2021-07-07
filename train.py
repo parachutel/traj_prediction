@@ -130,7 +130,7 @@ def main(args):
                 progress_bar.set_postfix(epoch=epoch,
                                          Loss=loss_val)
                 tbx.add_scalar('train/Loss', loss_val, step)
-                tbx.add_scalar('train/LR', optimizer.param_groups[0]['lr'], step)
+                tbx.add_scalar('hyper_params/LR', optimizer.param_groups[0]['lr'], step)
 
         # End epoch
         epochs_till_eval -= 1
@@ -174,7 +174,7 @@ def evaluate(model, data_loader, device):
             nll_exact_meter.update(nll_exact.item(), batch_size)
             # Log info
             progress_bar.update(batch_size)
-            progress_bar.set_postfix(NLL=nll_exact.item())
+            progress_bar.set_postfix(nll_p=nll_p.item())
 
     model.train()
     results_list = [('nll_q_is', nll_q_is_meter.avg),

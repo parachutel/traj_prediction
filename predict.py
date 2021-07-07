@@ -9,10 +9,6 @@ from tqdm import tqdm
 from tensorboardX import SummaryWriter
 
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-import torch.optim.lr_scheduler as sched
 
 from predictor.predictor import Predictor
 

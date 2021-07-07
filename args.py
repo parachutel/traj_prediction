@@ -35,11 +35,11 @@ def get_args():
                         help='Whether maximize or minimize the metric')
     parser.add_argument('--train_batch_size',
                         type=int,
-                        default=512,
+                        default=1024,
                         help='The batch size during training')
     parser.add_argument('--eval_batch_size',
                         type=int,
-                        default=256,
+                        default=1024,
                         help='The batch size during eval')
     parser.add_argument('--num_epochs',
                         type=int,

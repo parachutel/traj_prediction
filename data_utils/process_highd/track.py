@@ -1,4 +1,3 @@
-from data_management.read_csv import *
 import numpy as np
 import torch
 
@@ -7,7 +6,9 @@ import sys
 
 current_file_path = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_file_path + '/../../')
+sys.path.append(current_file_path + '/./')
 
+from data_management.read_csv import *
 from args import args
 
 
@@ -197,19 +198,6 @@ class Track:
             self.neighbor_left_following_uuids, self.neighbor_left_alongside_uuids,
             self.neighbor_left_preceding_uuids, self.neighbor_right_following_uuids,
             self.neighbor_right_alongside_uuids, self.neighbor_right_preceding_uuids))
-
-
-    def generate_local_interaction_temporal_graph_masks(self):
-        self.graph_masks = np.zeros((self.num_frames, 3, 3))
-
-        for t in range(self.num_frames):
-            neighbors = self.neighbors[:, t]
-            for i, neighbor in enumerate(neighbors):
-                if neighbor is not None:
-                    coords = (t,) + NEIGHBOR_IDX_TO_COORDS[i]
-                    self.graph_masks[coords] = 1
-
-        return self.graph_masks
 
 
     def get_state(self, i):
