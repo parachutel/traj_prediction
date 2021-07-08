@@ -79,7 +79,7 @@ def predict_lane(frame, sampled_future_trajs, track, tol=0.05):
     return res[-1][0], np.mean(x_error), np.mean(y_error)
 
 def eval_lane_pred_accuracy(model, track, device):
-    accuracy = []
+    accuracy = [] 
     x_error = []
     y_error = []
     with tqdm(total=len(range(INPUT_SEQ_LEN, track.num_frames - PRED_SEQ_LEN))) as progress_bar:
