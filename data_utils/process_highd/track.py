@@ -13,9 +13,9 @@ from args import args
 
 
 DEFAULT_FRAME_RATE = 25 # hz
-FORWARD_SHIFT_STRIDE = DEFAULT_FRAME_RATE * args.forward_shift_seconds
-INPUT_SEQ_LEN = DEFAULT_FRAME_RATE * args.input_seconds
-PRED_SEQ_LEN = DEFAULT_FRAME_RATE * args.pred_seconds
+FORWARD_SHIFT_STRIDE = int(DEFAULT_FRAME_RATE * args.forward_shift_seconds)
+INPUT_SEQ_LEN = int(DEFAULT_FRAME_RATE * args.input_seconds)
+PRED_SEQ_LEN = int(DEFAULT_FRAME_RATE * args.pred_seconds)
 TOTAL_SEQ_LEN = INPUT_SEQ_LEN + PRED_SEQ_LEN
 MIN_NUM_FRAMES = TOTAL_SEQ_LEN
 
