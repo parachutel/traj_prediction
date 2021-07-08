@@ -273,6 +273,7 @@ def get_args():
     args = parser.parse_args()
     
     args.data_list = list(range(1, 61))
+    # args.data_list = [1, 2, 3]
 
     return args
 

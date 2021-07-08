@@ -55,7 +55,7 @@ class Decoder(nn.Module):
 
         rnn_state = initial_state # hidden 
         tgt_prediction_present = input_seqs[:, -1, 1, 1, 2:4] # (x_dot, y_dot)
-        # x, y (idx 0 and 1) of target traj (grid 1, 1) at current step (t=-1 of input_seqs), (bs, pred_dim)
+        # x_dot, y_dot (idx 2 and 3) of target traj (grid 1, 1) at current step (t=-1 of input_seqs), (bs, pred_dim)
         input_ = torch.cat([zx, tgt_prediction_present.repeat(n_z_samples, 1)], dim=-1)
         # (bs * n_z_samples, z_dim + x_dim + pred_dim)
 

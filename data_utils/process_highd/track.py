@@ -19,6 +19,10 @@ PRED_SEQ_LEN = int(DEFAULT_FRAME_RATE * args.pred_seconds)
 TOTAL_SEQ_LEN = INPUT_SEQ_LEN + PRED_SEQ_LEN
 MIN_NUM_FRAMES = TOTAL_SEQ_LEN
 
+print('INPUT_SEQ_LEN =', INPUT_SEQ_LEN)
+print('PRED_SEQ_LEN =', PRED_SEQ_LEN)
+input()
+
 # Approximate emprical bounds from highD for normalizing data to (0, 1)
 MIN_X = 0
 MAX_X = 420

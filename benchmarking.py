@@ -41,7 +41,7 @@ def infer_future_trajs(frame, sampled_vels, track):
 
     return sampled_future_trajs
 
-def predict_lane(frame, sampled_future_trajs, track, tol=0.05):
+def predict_lane(frame, sampled_future_trajs, track, tol=0.1):
     '''
         Predict the lane ID of the endpoint of sampled_future_trajs
     '''
@@ -121,7 +121,9 @@ def eval_lane_pred_accuracy(model, track, device):
 
 mode = 'lane_pred'
 
-def benchmarking(dev_data_list=[14, 38, 23, 31, 20, 26, 32, 33, 17, 3, 27, 57, 49, 25, 55]):
+def benchmarking(max_n_eval=20):
+    dev_data_list=[14, 38, 23, 31, 20, 26, 32, 33, 17, 3, 27, 57, 49, 25, 55]
+    # dev_data_list=[14]
     device, args.gpu_ids = util.get_available_devices()
     model = Predictor(state_dim=args.state_dim,
                       rel_state_dim=args.state_dim,
@@ -153,7 +155,8 @@ def benchmarking(dev_data_list=[14, 38, 23, 31, 20, 26, 32, 33, 17, 3, 27, 57, 4
         'y_error': '[meter]',
     }
     # Prepare data
-    for data_id in dev_data_list:
+    for idx in range(len(dev_data_list)):
+        data_id = dev_data_list[idx]
         data_str = '{:02d}'.format(data_id)
         with open(PROCESSED_DATASET_PATH.format(data_str), 'rb') as f:
             uuid_to_track = pickle.load(f)
@@ -163,12 +166,13 @@ def benchmarking(dev_data_list=[14, 38, 23, 31, 20, 26, 32, 33, 17, 3, 27, 57, 4
 
         n_eval = 0
         i = 0
-        while n_eval < 20: # eval 20 tracks for each data file
+        while n_eval < max_n_eval:
             track_id = track_ids[i]
             i += 1
             track = uuid_to_track[list(uuid_to_track.keys())[track_id - 1]]
             if track.num_lane_changes > 0 and track.num_frames > TOTAL_SEQ_LEN:
                 # Only eval tracks with at least one lane change
+                print(f'[{idx + 1}]/[{len(dev_data_list)}] : [{n_eval + 1}]/[{max_n_eval}]')
                 print(f'Evaluating data_id = {data_str} track_id = {track_id}...')
                 n_eval += 1
                 track.generate_data_tensors(uuid_to_track)
@@ -182,7 +186,8 @@ def benchmarking(dev_data_list=[14, 38, 23, 31, 20, 26, 32, 33, 17, 3, 27, 57, 4
     print('=' * 80)
     print('Benchmarking results:')
     for k, v in results.items():
-        print('{} = {:.3f} {}'.format(k, v, units[k]))
+        print('{} = {:.3f} {}'.format(k, np.mean(v), units[k]))
+    print('=' * 80)
 
 
 if __name__ == '__main__':
