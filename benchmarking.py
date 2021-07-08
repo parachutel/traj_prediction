@@ -23,16 +23,17 @@ def infer_future_trajs(frame, sampled_vels, track):
     '''
     sampled_future_trajs = []
     for i in range(args.n_z_samples_pred):
-        x, y = track.xs[frame], track.ys[frame]
+        x, y = track.xs[frame], track.ys[frame] # non-frenet
         traj_x, traj_y = [], []
         for t in range(args.n_pred_steps):
             x_dot, y_dot = sampled_vels[i][t]
             x_dot = denormalize(x_dot, MIN_ABS_VEL_X, MAX_ABS_VEL_X)
             y_dot = denormalize(y_dot, MIN_ABS_VEL_Y, MAX_ABS_VEL_Y)
-            x = x + dt * x_dot
             if track.driving_direction == 1:
+                x = x - dt * x_dot
                 y = y - dt * y_dot
             else:
+                x = x + dt * x_dot
                 y = y + dt * y_dot
             traj_x.append(x)
             traj_y.append(y)
@@ -44,6 +45,7 @@ def predict_lane(frame, sampled_future_trajs, track, tol=0.05):
     '''
         Predict the lane ID of the endpoint of sampled_future_trajs
     '''
+    x_error = []
     y_error = []
     votes = {}
     init_lane_id = track.lane_ids[frame]
@@ -51,7 +53,10 @@ def predict_lane(frame, sampled_future_trajs, track, tol=0.05):
     for i in range(args.n_z_samples_pred):
         x_end, y_end = sampled_future_trajs[i][-1]
         _y_error = abs(y_end - track.ys[frame + args.n_pred_steps])
+        _x_error = abs(x_end - track.xs[frame + args.n_pred_steps])
         y_error.append(_y_error)
+        x_error.append(_x_error)
+
         pred_lane_id = -1 # for outlier samples
         for k in range(len(lane_markings) - 1):
             upper = lane_markings[k]
@@ -71,10 +76,11 @@ def predict_lane(frame, sampled_future_trajs, track, tol=0.05):
 
     res = [(lane_id, counts) for lane_id, counts in votes.items()]
     res = sorted(res, key=lambda x: x[1]) # ascending order in counts
-    return res[-1][0], np.mean(y_error)
+    return res[-1][0], np.mean(x_error), np.mean(y_error)
 
 def eval_lane_pred_accuracy(model, track, device):
     accuracy = []
+    x_error = []
     y_error = []
     with tqdm(total=len(range(INPUT_SEQ_LEN, track.num_frames - PRED_SEQ_LEN))) as progress_bar:
         for frame in range(INPUT_SEQ_LEN, track.num_frames - PRED_SEQ_LEN):
@@ -91,11 +97,13 @@ def eval_lane_pred_accuracy(model, track, device):
     
             sampled_future_trajs = infer_future_trajs(frame, sampled_vels, track)
             true_future_lane_id = track.lane_ids[frame + PRED_SEQ_LEN]
-            pred_future_lane_id, pred_y_error = predict_lane(frame, sampled_future_trajs, track)
+            pred_future_lane_id, pred_x_error, pred_y_error = \
+                predict_lane(frame, sampled_future_trajs, track)
     
             # print(true_future_lane_id, pred_future_lane_id, pred_y_error)
     
             accuracy.append(true_future_lane_id == pred_future_lane_id)
+            x_error.append(pred_x_error)
             y_error.append(pred_y_error)
     
             progress_bar.update(1)
@@ -104,9 +112,11 @@ def eval_lane_pred_accuracy(model, track, device):
 
     accuracy = sum(accuracy) / len(accuracy) * 100
     y_error = np.mean(y_error)
+    x_error = np.mean(x_error)
     print('Lane ID prediction accuracy = {:.3f}%'.format(accuracy))
+    print('Mean prediction x error     = {:.3f} [meter]'.format(x_error))
     print('Mean prediction y error     = {:.3f} [meter]'.format(y_error))
-    return accuracy, y_error
+    return accuracy, x_error, y_error
 
 
 mode = 'lane_pred'
@@ -134,11 +144,13 @@ def benchmarking(dev_data_list=[14, 38, 23, 31, 20, 26, 32, 33, 17, 3, 27, 57, 4
 
     results = {
         'lane_pred_accuracy': [],
-        'y_error': []
+        'x_error': [],
+        'y_error': [],
     }
     units = {
         'lane_pred_accuracy': '%',
-        'y_error': '[meter]'
+        'x_error': '[meter]',
+        'y_error': '[meter]',
     }
     # Prepare data
     for data_id in dev_data_list:
@@ -160,8 +172,11 @@ def benchmarking(dev_data_list=[14, 38, 23, 31, 20, 26, 32, 33, 17, 3, 27, 57, 4
                 print(f'Evaluating data_id = {data_str} track_id = {track_id}...')
                 n_eval += 1
                 track.generate_data_tensors(uuid_to_track)
-                lane_pred_accuracy, y_error = eval_lane_pred_accuracy(model, track, device)
+                # Not converting to Frenet since we still want to know lane id info
+                # track.convert_xy_to_frenet()
+                lane_pred_accuracy, x_error, y_error = eval_lane_pred_accuracy(model, track, device)
                 results['lane_pred_accuracy'].append(lane_pred_accuracy)
+                results['x_error'].append(x_error)
                 results['y_error'].append(y_error)
 
     print('=' * 80)
