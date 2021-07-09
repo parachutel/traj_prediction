@@ -9,7 +9,7 @@ from tqdm import tqdm
 from tensorboardX import SummaryWriter
 
 import torch
-
+import torch.nn.functional as F
 from predictor.predictor import Predictor
 
 from data_utils.highd_dataset import build_highd_data_loader
@@ -65,7 +65,7 @@ def main(args):
 
     # Predict
     log.info('Predicting...')
-    vis_idxs = np.random.randint(0, dataset_size, args.n_vis)
+    vis_idxs = np.random.randint(0, dataset_size, args.n_vis) # n_vis = bs
 
     vis_data = test_loader.dataset[vis_idxs]
     input_seq, _, input_edge_types, pred_seq = vis_data
@@ -74,9 +74,13 @@ def main(args):
         input_seq, input_edge_types, args.n_z_samples_pred, most_likely=False)
     # sampled_future.shape = (n_z_samples, n_vis, pred_seq_len, 2)
 
+    mse = F.mse_loss(sampled_future.mean(dim=0), pred_seq[:, :, 1, 1, 2:4])
+    log.info(f'MSE = {mse.item()}')
+    # exit()
+
     sampled_future = sampled_future.detach().cpu().numpy()
     input_seq = input_seq.detach().cpu().numpy()
-    pred_seq = pred_seq.detach().cpu().numpy()
+    pred_seq = pred_seq.detach().cpu().numpy() # (n_vis, pred_seq_len, 2)
 
     for traj_id in tqdm(range(args.n_vis)):
         sampled_vels = sampled_future[:, traj_id] # (x_dot, y_dot), (n_samples, pred_seq_len, 2)

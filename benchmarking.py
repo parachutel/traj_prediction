@@ -5,6 +5,7 @@ import torch
 from tqdm import tqdm
 
 from predictor.predictor import Predictor
+from predictor.vanilla_lstm_predictor import VanillaLSTMPredictor
 from data_utils.process_highd.track import *
 import util
 from args import args
@@ -22,7 +23,7 @@ def infer_future_trajs(frame, sampled_vels, track):
         frame: initial frame ID
     '''
     sampled_future_trajs = []
-    for i in range(args.n_z_samples_pred):
+    for i in range(len(sampled_vels)):
         x, y = track.xs[frame], track.ys[frame] # non-frenet
         traj_x, traj_y = [], []
         for t in range(args.n_pred_steps):
@@ -50,7 +51,7 @@ def predict_lane(frame, sampled_future_trajs, track, tol=0.1):
     votes = {}
     init_lane_id = track.lane_ids[frame]
     lane_markings = list(track.upper_lane_markings) + list(track.lower_lane_markings)
-    for i in range(args.n_z_samples_pred):
+    for i in range(len(sampled_future_trajs)):
         x_end, y_end = sampled_future_trajs[i][-1]
         _y_error = abs(y_end - track.ys[frame + args.n_pred_steps])
         _x_error = abs(x_end - track.xs[frame + args.n_pred_steps])
@@ -89,11 +90,17 @@ def eval_lane_pred_accuracy(model, track, device):
     
             input_seq = torch.tensor(input_seq).float().to(device).unsqueeze(0)
             input_edge_types = torch.tensor(input_edge_types).float().to(device).unsqueeze(0)
-        
-            sampled_future, z_p_samples = model.predict(
-                input_seq, input_edge_types, args.n_z_samples_pred, most_likely=False)
-            # sampled_future.shape = (n_z_samples_pred, 1, n_pred_steps, pred_dim), bs = 1
-            sampled_vels = sampled_future.squeeze().detach().cpu().numpy() # (n_z_samples_pred, pred_seq_len, 2)
+
+            if args.model == 'cvae':
+                sampled_future, z_p_samples = model.predict(
+                    input_seq, input_edge_types, args.n_z_samples_pred, most_likely=False)
+                # sampled_future.shape = (n_z_samples_pred, 1, n_pred_steps, pred_dim), bs = 1
+                sampled_vels = sampled_future.squeeze().detach().cpu().numpy() # (n_z_samples_pred, pred_seq_len, 2)
+            elif args.model == 'vanilla':
+                sampled_vels = model.predict(input_seq, args.n_pred_steps)
+                sampled_vels = sampled_vels.detach().cpu().numpy()
+                # print(sampled_vels.shape)
+                # (1, n_pred_steps, 2), n_z_samples_pred = 1
     
             sampled_future_trajs = infer_future_trajs(frame, sampled_vels, track)
             true_future_lane_id = track.lane_ids[frame + PRED_SEQ_LEN]
@@ -125,20 +132,26 @@ def benchmarking(max_n_eval=20):
     dev_data_list=[14, 38, 23, 31, 20, 26, 32, 33, 17, 3, 27, 57, 49, 25, 55]
     # dev_data_list=[14]
     device, args.gpu_ids = util.get_available_devices()
-    model = Predictor(state_dim=args.state_dim,
-                      rel_state_dim=args.state_dim,
-                      pred_dim=args.pred_dim,
-                      edge_type_dim=args.n_edge_types,
-                      nhe_hidden_size=args.nhe_hidden_size,
-                      ehe_hidden_size=args.ehe_hidden_size,
-                      nfe_hidden_size=args.nfe_hidden_size,
-                      decoder_hidden_size=args.decoder_hidden_size,
-                      gmm_components=args.gmm_components,
-                      log_sigma_min=args.log_sigma_min,
-                      log_sigma_max=args.log_sigma_max,
-                      log_p_yt_xz_max=args.log_p_yt_xz_max,
-                      kl_weight=args.kl_weight,
-                      device=device)
+    if args.model == 'cvae':
+        model = Predictor(state_dim=args.state_dim,
+                          rel_state_dim=args.state_dim,
+                          pred_dim=args.pred_dim,
+                          edge_type_dim=args.n_edge_types,
+                          nhe_hidden_size=args.nhe_hidden_size,
+                          ehe_hidden_size=args.ehe_hidden_size,
+                          nfe_hidden_size=args.nfe_hidden_size,
+                          decoder_hidden_size=args.decoder_hidden_size,
+                          gmm_components=args.gmm_components,
+                          log_sigma_min=args.log_sigma_min,
+                          log_sigma_max=args.log_sigma_max,
+                          log_p_yt_xz_max=args.log_p_yt_xz_max,
+                          kl_weight=args.kl_weight,
+                          device=device)
+    elif args.model == 'vanilla':
+        model = VanillaLSTMPredictor(state_dim=args.state_dim,
+                                     pred_dim=args.pred_dim,
+                                     hidden_size=32,
+                                     device=device)
     model = model.to(device)
     model.eval()
 

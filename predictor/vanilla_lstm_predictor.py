@@ -39,7 +39,7 @@ class VanillaLSTMPredictor(nn.Module):
             pred = self.output(h_state)
             preds.append(pred)
 
-        preds = torch.stack(preds, dim=1) # (bs, n_pred_steps, hidden_size)
+        preds = torch.stack(preds, dim=1) # (bs, n_pred_steps, pred_dim)
         return preds
 
     def get_loss(self, input_seqs, pred_seqs, n_pred_steps=50):

@@ -70,9 +70,10 @@ def main(args):
     
     # Get data loader
     log.info('Building dataset...')
+    random.shuffle(args.data_list)
+    args.data_list = args.data_list[:int(len(args.data_list) * args.data_use_ratio)]
     n_total_data_files = len(args.data_list)
     n_train_data_files = int(0.75 * n_total_data_files)
-    random.shuffle(args.data_list)
     train_data_list = args.data_list[:n_train_data_files]
     dev_data_list = args.data_list[n_train_data_files:]
     print('train_data_list =', train_data_list)

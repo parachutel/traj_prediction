@@ -9,6 +9,10 @@ def get_args():
     #                     help='')
 
     # Training and eval
+    parser.add_argument('--model',
+                        type=str,
+                        default='cvae',
+                        help='Name of the model to use.')
     parser.add_argument('--name',
                         type=str,
                         default='train',
@@ -74,6 +78,10 @@ def get_args():
                         help='The number of trajecories to visualize.')
     # Dataset
     parser.add_argument('--data_list', nargs='+', type=int)
+    parser.add_argument('--data_use_ratio',
+                        type=float,
+                        default=1.0,
+                        help='The ratio of the number of dataset to use.')
 
     # Dataset features
     parser.add_argument('--state_dim',

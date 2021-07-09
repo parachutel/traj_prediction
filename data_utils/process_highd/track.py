@@ -21,7 +21,7 @@ MIN_NUM_FRAMES = TOTAL_SEQ_LEN
 
 print('INPUT_SEQ_LEN =', INPUT_SEQ_LEN)
 print('PRED_SEQ_LEN =', PRED_SEQ_LEN)
-input()
+input('Press Enter to confirm...')
 
 # Approximate emprical bounds from highD for normalizing data to (0, 1)
 MIN_X = 0
@@ -91,7 +91,7 @@ class Track:
 
         # track
         self.frames = track[FRAME]
-        ## Convert upper left corner x y to upper center x y
+        ## Convert upper left corner x y to center x y
         self.width = track[BBOX][:, 2]
         self.height = track[BBOX][:, 3]
         self.xs = track[BBOX][:, 0] + self.width / 2 # x + w / 2 
