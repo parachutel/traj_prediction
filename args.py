@@ -67,7 +67,7 @@ def get_args():
                         help='Learning rate.')
     parser.add_argument('--learning_decay_rate',
                         type=float,
-                        default=0.9999)
+                        default=0.99996)
     parser.add_argument('--pred_id',
                         type=int,
                         default=0,
@@ -76,6 +76,10 @@ def get_args():
                         type=int,
                         default=20,
                         help='The number of trajecories to visualize.')
+    parser.add_argument('--most_likely',
+                        type=lambda s: s.lower().startswith('t'),
+                        default=False, # minimize nll
+                        help='Whether to use the best z during prediction.')
     # Dataset
     parser.add_argument('--data_list', nargs='+', type=int)
     parser.add_argument('--data_use_ratio',
@@ -147,10 +151,15 @@ def get_args():
                         type=int,
                         default=128,
                         help='The feature dimension of the inputs of latent encoder.')
+    parser.add_argument('--n_latent_vars',
+                        type=int,
+                        default=2,
+                        help='The number of latent variables.')
     parser.add_argument('--latent_dim',
                         type=int,
                         default=5,
                         help='The feature dimension of the latent variable.')
+    ### z has latent_dim ** n_latent_vars possible values
     parser.add_argument('--kl_min',
                         type=float,
                         default=0.07,

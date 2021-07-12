@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from args import args
 
 class VanillaLSTMPredictor(nn.Module):
 
@@ -19,7 +20,7 @@ class VanillaLSTMPredictor(nn.Module):
 
         self.device = device
 
-    def predict(self, input_seqs, n_pred_steps=50):
+    def predict(self, input_seqs, n_pred_steps=None):
         # input_seqs.shape = (bs, seq, 3, 3, state_dim)
         state_histories = input_seqs[:, :, 1, 1] # center of the 3x3 grid
         # (bs, seq, state_dim)
@@ -33,6 +34,8 @@ class VanillaLSTMPredictor(nn.Module):
         rnn_state = (h_n.squeeze(0), c_n.squeeze(0))
         h_state = hiddens[-1] # (bs, hidden_size)
         preds = []
+        if n_pred_steps is None:
+            n_pred_steps = args.n_pred_steps
         for _ in range(n_pred_steps):
             h_state, c_state = self.decoder_lstm_cell(h_state, rnn_state)
             rnn_state = (h_state, c_state)
@@ -42,12 +45,14 @@ class VanillaLSTMPredictor(nn.Module):
         preds = torch.stack(preds, dim=1) # (bs, n_pred_steps, pred_dim)
         return preds
 
-    def get_loss(self, input_seqs, pred_seqs, n_pred_steps=50):
+    def get_loss(self, input_seqs, pred_seqs):
         # pred_seqs (bs, pred_seq_len, 3, 3, state_dim)
         targets = pred_seqs[:, :, 1, 1, 2:4] 
         # (bs, pred_seq_len, pred_dim)
 
-        preds = self.predict(input_seqs, n_pred_steps)
+        n_pred_steps = pred_seqs.shape[1]
+
+        preds = self.predict(input_seqs, n_pred_steps=n_pred_steps)
         # (bs, pred_seq_len, pred_dim)
 
         loss = F.mse_loss(preds, targets)

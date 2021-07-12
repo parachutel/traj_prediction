@@ -20,6 +20,7 @@ from args import args
 
 def main(args):
     # Set up logging and devices
+    args.name = args.model
     args.save_dir = util.get_save_dir(args, training=True)
     log = util.get_logger(args.save_dir, args.name)
     tbx = SummaryWriter(args.save_dir)

@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FFMpegFileWriter
 
 from predictor.predictor import Predictor
+from predictor.vanilla_lstm_predictor import VanillaLSTMPredictor
 from data_utils.process_highd.track import *
 from data_utils.process_highd.process_highd import *
 import util
@@ -14,15 +15,15 @@ from args import args
 PROCESSED_DATASET_PATH = './data/processed_data/highd/{}_uuid_to_track.pickle'
 ANIMATION_DIR = './save/animation/highd_input={}_pred={}_stride={}'.format(
     args.input_seconds, args.pred_seconds, args.forward_shift_seconds)
-ANIMATION_PATH = ANIMATION_DIR + '/{}_{}_fps={}_animation.mp4'
+ANIMATION_PATH = ANIMATION_DIR + '/{}_{}_{}_fps={}_animation.mp4'
 
-dt = 1/25
+dt = 1 / DEFAULT_FRAME_RATE
 
 if not os.path.exists(ANIMATION_DIR):
     os.makedirs(ANIMATION_DIR)
 
 def plot_sampled_future(frame, ax, sampled_vels, track):
-    for i in range(args.n_z_samples_pred):
+    for i in range(len(sampled_vels)):
         x, y = track.xs[frame], track.ys[frame]
         _sampled_vels = sampled_vels[i] # (pred_seq_len, 2)
         traj_x, traj_y = [], []
@@ -40,28 +41,37 @@ def gen_pred_animation(data_id=1, track_id=1, fps=20):
     global ANIMATION_PATH
     # Load model
     device, args.gpu_ids = util.get_available_devices()
-    model = Predictor(state_dim=args.state_dim,
-                      rel_state_dim=args.state_dim,
-                      pred_dim=args.pred_dim,
-                      edge_type_dim=args.n_edge_types,
-                      nhe_hidden_size=args.nhe_hidden_size,
-                      ehe_hidden_size=args.ehe_hidden_size,
-                      nfe_hidden_size=args.nfe_hidden_size,
-                      decoder_hidden_size=args.decoder_hidden_size,
-                      gmm_components=args.gmm_components,
-                      log_sigma_min=args.log_sigma_min,
-                      log_sigma_max=args.log_sigma_max,
-                      log_p_yt_xz_max=args.log_p_yt_xz_max,
-                      kl_weight=args.kl_weight,
-                      device=device)
+    if args.model == 'cvae':
+        model = Predictor(state_dim=args.state_dim,
+                          rel_state_dim=args.state_dim,
+                          pred_dim=args.pred_dim,
+                          edge_type_dim=args.n_edge_types,
+                          nhe_hidden_size=args.nhe_hidden_size,
+                          ehe_hidden_size=args.ehe_hidden_size,
+                          nfe_hidden_size=args.nfe_hidden_size,
+                          decoder_hidden_size=args.decoder_hidden_size,
+                          gmm_components=args.gmm_components,
+                          log_sigma_min=args.log_sigma_min,
+                          log_sigma_max=args.log_sigma_max,
+                          log_p_yt_xz_max=args.log_p_yt_xz_max,
+                          kl_weight=args.kl_weight,
+                          device=device)
+        args.name = args.model + ('_zbest' if args.most_likely else '_full')
+    elif args.model == 'vanilla':
+        model = VanillaLSTMPredictor(state_dim=args.state_dim,
+                                     pred_dim=args.pred_dim,
+                                     hidden_size=32,
+                                     device=device)
+        args.name = args.model
     model = model.to(device)
     model.eval()
 
+    print(f'Loading checkpoint from {args.load_path}...')
     model, step = util.load_model(model, args.load_path, args.gpu_ids)
 
     # Prepare data
     data_str = '{:02d}'.format(data_id)
-    ANIMATION_PATH = ANIMATION_PATH.format(data_str, track_id, fps)
+    ANIMATION_PATH = ANIMATION_PATH.format(args.name, data_str, track_id, fps)
     with open(PROCESSED_DATASET_PATH.format(data_str), 'rb') as f:
         uuid_to_track = pickle.load(f)
 
@@ -72,7 +82,7 @@ def gen_pred_animation(data_id=1, track_id=1, fps=20):
 
     # Prepare plot
     fig, ax = plt.subplots()
-    fig.set_figwidth(25) # inches
+    # fig.set_figwidth(25) # inches
     moviewriter = FFMpegFileWriter(fps=fps)
 
     target_traj = []
@@ -90,11 +100,16 @@ def gen_pred_animation(data_id=1, track_id=1, fps=20):
     
             input_seq = torch.tensor(input_seq).float().to(device).unsqueeze(0)
             input_edge_types = torch.tensor(input_edge_types).float().to(device).unsqueeze(0)
-    
-            sampled_future, z_p_samples = model.predict(
-                input_seq, input_edge_types, args.n_z_samples_pred, most_likely=False)
-            # sampled_future.shape = (n_z_samples_pred, 1, n_pred_steps, pred_dim), bs = 1
-            sampled_vels = sampled_future.squeeze().detach().cpu().numpy() # (n_z_samples_pred, pred_seq_len, 2)
+            
+            if args.model == 'cvae':
+                sampled_future, z_p_samples = model.predict(
+                    input_seq, input_edge_types, args.n_z_samples_pred, most_likely=False)
+                # sampled_future.shape = (n_z_samples_pred, 1, n_pred_steps, pred_dim), bs = 1
+            elif args.model == 'vanilla':
+                sampled_future = model.predict(input_seq, args.n_pred_steps)
+                sampled_future = sampled_future.unsqueeze(0)
+                # (1, 1, n_pred_steps, pred_dim), n_z_samples_pred = 1
+            sampled_vels = sampled_future.squeeze(1).detach().cpu().numpy() # (n_z_samples_pred, pred_seq_len, 2)
 
             # Plot sampled_future
             plot_sampled_future(frame, ax, sampled_vels, track)

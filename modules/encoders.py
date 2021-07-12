@@ -35,7 +35,7 @@ class Encoder(nn.Module):
                                              args.latent_input_size)
         self.latent_x_input_mlp = nn.Linear(self.x_size, args.latent_input_size)
         self.latent = DiscreteLatent(latent_input_size=args.latent_input_size,
-                                     pred_dim=args.pred_dim,
+                                     n_latent_vars=args.n_latent_vars,
                                      latent_dim=args.latent_dim,
                                      kl_min=args.kl_min,
                                      device=device)

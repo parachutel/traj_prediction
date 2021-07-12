@@ -62,7 +62,8 @@ def update_frame(i, ax, track, data_str, target_traj, neighbor_trajs, x_reversed
     ax.invert_yaxis()
     ax.set_title('Data = {}, Track ID = {}, Driving Direction = {}'.format(
                   data_str, int(track.track_id), int(track.driving_direction)))
-    ax.set_aspect('equal', 'box')
+    # ax.set_aspect('equal', 'box')
+    plt.gcf().set_size_inches(20, 6)
     plt.tight_layout()
     ax.plot([0, 420], [0, 0], 
                  color='k', linewidth=1.5, linestyle='dashed')

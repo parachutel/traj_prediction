@@ -133,6 +133,7 @@ class Predictor(nn.Module):
         mode = 'predict'
 
         x = self.encoder(input_seqs, input_edge_types, pred_seqs=None, mode=mode)
+        # (bs, encoder.x_size)
         self.encoder.latent.p_dist = self.encoder.p_z_x(x, mode)
         z_p_samples = self.encoder.latent.sample_p(num_samples, mode, most_likely=most_likely)
         y_dist, sampled_future = self.decoder.p_y_xz(x, z_p_samples, num_samples, input_seqs, 

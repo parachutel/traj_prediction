@@ -48,7 +48,7 @@ def predict_lane(frame, sampled_future_trajs, track, tol=0.1):
     '''
     x_error = []
     y_error = []
-    votes = {}
+    votes = []
     init_lane_id = track.lane_ids[frame]
     lane_markings = list(track.upper_lane_markings) + list(track.lower_lane_markings)
     for i in range(len(sampled_future_trajs)):
@@ -71,13 +71,9 @@ def predict_lane(frame, sampled_future_trajs, track, tol=0.1):
                 break
         
         if pred_lane_id not in votes:
-            votes[pred_lane_id] = 1
-        else:
-            votes[pred_lane_id] += 1
+            votes.append(pred_lane_id)
 
-    res = [(lane_id, counts) for lane_id, counts in votes.items()]
-    res = sorted(res, key=lambda x: x[1]) # ascending order in counts
-    return res[-1][0], np.mean(x_error), np.mean(y_error)
+    return votes, np.mean(x_error), np.mean(y_error)
 
 def eval_lane_pred_accuracy(model, track, device):
     accuracy = [] 
@@ -104,12 +100,12 @@ def eval_lane_pred_accuracy(model, track, device):
     
             sampled_future_trajs = infer_future_trajs(frame, sampled_vels, track)
             true_future_lane_id = track.lane_ids[frame + PRED_SEQ_LEN]
-            pred_future_lane_id, pred_x_error, pred_y_error = \
+            pred_future_lane_id_votes, pred_x_error, pred_y_error = \
                 predict_lane(frame, sampled_future_trajs, track)
     
             # print(true_future_lane_id, pred_future_lane_id, pred_y_error)
     
-            accuracy.append(true_future_lane_id == pred_future_lane_id)
+            accuracy.append(true_future_lane_id in pred_future_lane_id_votes)
             x_error.append(pred_x_error)
             y_error.append(pred_y_error)
     

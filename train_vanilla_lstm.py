@@ -19,7 +19,7 @@ from args import args
 
 def main(args):
     # Set up logging and devices
-    args.name = 'vanilla_lstm'
+    args.name = args.model
     args.metric_name = 'mse'
     args.save_dir = util.get_save_dir(args, training=True)
     log = util.get_logger(args.save_dir, args.name)
@@ -105,7 +105,7 @@ def main(args):
                 optimizer.zero_grad()
 
                 # Forward
-                loss = model.get_loss(input_seq, pred_seq, n_pred_steps=args.n_pred_steps)
+                loss = model.get_loss(input_seq, pred_seq)
                 loss_val = loss.item()
 
                 # Backward
@@ -153,7 +153,7 @@ def evaluate(model, data_loader, device):
 
             batch_size = input_seq.size(0)
             # Forward
-            mse = model.get_loss(input_seq, pred_seq, n_pred_steps=args.n_pred_steps)
+            mse = model.get_loss(input_seq, pred_seq)
 
             mse_meter.update(mse.item(), batch_size)
             # Log info

@@ -10,7 +10,9 @@ from tensorboardX import SummaryWriter
 
 import torch
 import torch.nn.functional as F
+
 from predictor.predictor import Predictor
+from predictor.vanilla_lstm_predictor import VanillaLSTMPredictor
 
 from data_utils.highd_dataset import build_highd_data_loader
 from data_utils.process_highd.track import *
@@ -18,8 +20,14 @@ from data_utils.process_highd.track import *
 import util
 from args import args
 
+dt = 1 / DEFAULT_FRAME_RATE
+
 def main(args):
     # Set up logging and devices
+    if args.name == 'train':
+        args.name = args.model
+    if args.model == 'cvae':
+        args.name += '_zbest' if args.most_likely else '_full'
     args.save_dir = util.get_save_dir(args, training=False)
     log = util.get_logger(args.save_dir, args.name)
     device, args.gpu_ids = util.get_available_devices()
@@ -36,20 +44,26 @@ def main(args):
 
     # Get model
     log.info('Building model...')
-    model = Predictor(state_dim=args.state_dim,
-                      rel_state_dim=args.state_dim,
-                      pred_dim=args.pred_dim,
-                      edge_type_dim=args.n_edge_types,
-                      nhe_hidden_size=args.nhe_hidden_size,
-                      ehe_hidden_size=args.ehe_hidden_size,
-                      nfe_hidden_size=args.nfe_hidden_size,
-                      decoder_hidden_size=args.decoder_hidden_size,
-                      gmm_components=args.gmm_components,
-                      log_sigma_min=args.log_sigma_min,
-                      log_sigma_max=args.log_sigma_max,
-                      log_p_yt_xz_max=args.log_p_yt_xz_max,
-                      kl_weight=args.kl_weight,
-                      device=device)
+    if args.model == 'cvae':
+        model = Predictor(state_dim=args.state_dim,
+                          rel_state_dim=args.state_dim,
+                          pred_dim=args.pred_dim,
+                          edge_type_dim=args.n_edge_types,
+                          nhe_hidden_size=args.nhe_hidden_size,
+                          ehe_hidden_size=args.ehe_hidden_size,
+                          nfe_hidden_size=args.nfe_hidden_size,
+                          decoder_hidden_size=args.decoder_hidden_size,
+                          gmm_components=args.gmm_components,
+                          log_sigma_min=args.log_sigma_min,
+                          log_sigma_max=args.log_sigma_max,
+                          log_p_yt_xz_max=args.log_p_yt_xz_max,
+                          kl_weight=args.kl_weight,
+                          device=device)
+    elif args.model == 'vanilla':
+        model = VanillaLSTMPredictor(state_dim=args.state_dim,
+                                     pred_dim=args.pred_dim,
+                                     hidden_size=32,
+                                     device=device)
     
     log.info(f'Loading checkpoint from {args.load_path}...')
     model, step = util.load_model(model, args.load_path, args.gpu_ids)
@@ -58,21 +72,24 @@ def main(args):
     model.eval()
 
     log.info('Building dataset...')
-    test_data_list = [1]
+    test_data_list = [14]
     test_loader = build_highd_data_loader(test_data_list, args.eval_batch_size)
     dataset_size = len(test_loader.dataset)
     log.info(f'Test dataset size = {dataset_size}')
 
+    vis_idxs = np.random.randint(0, dataset_size, args.n_vis) # n_vis = bs
+    input_seq, _, input_edge_types, pred_seq = test_loader.dataset[vis_idxs]
+
     # Predict
     log.info('Predicting...')
-    vis_idxs = np.random.randint(0, dataset_size, args.n_vis) # n_vis = bs
-
-    vis_data = test_loader.dataset[vis_idxs]
-    input_seq, _, input_edge_types, pred_seq = vis_data
-
-    sampled_future, z_p_samples = model.predict(
-        input_seq, input_edge_types, args.n_z_samples_pred, most_likely=False)
-    # sampled_future.shape = (n_z_samples, n_vis, pred_seq_len, 2)
+    if args.model == 'cvae':
+        sampled_future, z_p_samples = model.predict(
+            input_seq, input_edge_types, args.n_z_samples_pred, most_likely=args.most_likely)
+        # sampled_future.shape = (n_z_samples, n_vis, pred_seq_len, 2)
+    elif args.model == 'vanilla':
+        sampled_future = model.predict(input_seq, args.n_pred_steps)
+        sampled_future = sampled_future.unsqueeze(0)
+        # (1, n_vis, n_pred_steps, 2), n_z_samples = 1
 
     mse = F.mse_loss(sampled_future.mean(dim=0), pred_seq[:, :, 1, 1, 2:4])
     log.info(f'MSE = {mse.item()}')
@@ -82,6 +99,7 @@ def main(args):
     input_seq = input_seq.detach().cpu().numpy()
     pred_seq = pred_seq.detach().cpu().numpy() # (n_vis, pred_seq_len, 2)
 
+    log.info('Visualizing...')
     for traj_id in tqdm(range(args.n_vis)):
         sampled_vels = sampled_future[:, traj_id] # (x_dot, y_dot), (n_samples, pred_seq_len, 2)
         input_traj = input_seq[traj_id, :, 1, 1, :2] # (x, y), (in_seq_len, 2)
@@ -92,7 +110,7 @@ def main(args):
         
         ground_truth_vels = pred_seq[traj_id, :, 1, 1, 2:4]
         
-        dt = 1/25
+        
         x_t, y_t = denormalize(input_traj[-1, 0], MIN_X, MAX_X), input_traj[-1, 1] * LANE_WIDTH
         traj_x_t, traj_y_t = [], []
         for t in range(args.n_pred_steps):
@@ -104,7 +122,7 @@ def main(args):
             traj_x_t.append(x_t)
             traj_y_t.append(y_t)
         plt.plot(traj_x_t, traj_y_t, color='m')
-        for i in range(args.n_z_samples_pred):
+        for i in range(len(sampled_vels)):
             x, y = denormalize(input_traj[-1, 0], MIN_X, MAX_X), input_traj[-1, 1] * LANE_WIDTH
             _sampled_vels = sampled_vels[i] # (pred_seq_len, 2)
             traj_x, traj_y = [], []
@@ -123,9 +141,9 @@ def main(args):
         plt.ylabel('y (m)')
         # plt.gcf().set_figwidth(25) # inches
         # plt.gca().set_aspect('equal', 'box')
-        # plt.gcf().set_size_inches(20, 6)
-        # plt.gca().set_xlim(0, 420)
-        # plt.gca().set_ylim(-6, 6)
+        plt.gcf().set_size_inches(20, 6)
+        plt.gca().set_xlim(0, 420)
+        plt.gca().set_ylim(-6, 6)
         plt.tight_layout()
         plt.savefig(args.save_dir + f'/{traj_id}.png')
         plt.gca().cla()
