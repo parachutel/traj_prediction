@@ -25,6 +25,7 @@ class Predictor(nn.Module):
                  log_sigma_max=args.log_sigma_max,
                  log_p_yt_xz_max=args.log_p_yt_xz_max,
                  kl_weight=args.kl_weight,
+                 masked_ehe=args.masked_ehe,
                  device='cpu'):
 
         super().__init__()
@@ -35,6 +36,7 @@ class Predictor(nn.Module):
                                nhe_hidden_size=nhe_hidden_size,
                                ehe_hidden_size=ehe_hidden_size,
                                nfe_hidden_size=nfe_hidden_size,
+                               masked_ehe=masked_ehe,
                                device=device)
         
         self.decoder = Decoder(x_size=self.encoder.x_size,
@@ -57,10 +59,10 @@ class Predictor(nn.Module):
         setup_hyperparams_annealing(self)
 
 
-    def get_training_loss(self, input_seq, input_edge_types, pred_seq):
+    def get_training_loss(self, input_seq, input_masks, input_edge_types, pred_seq):
         mode = 'training'
 
-        x, y = self.encoder(input_seq, input_edge_types, pred_seq, mode)
+        x, y = self.encoder(input_seq, input_masks, input_edge_types, pred_seq, mode)
         z, kl = self.encoder.get_z_and_kl_qp(x, y, mode)
 
         log_p_y_xz = self.decoder.log_p_y_xz(x, z, args.n_z_samples_training, input_seq, pred_seq,
@@ -83,12 +85,12 @@ class Predictor(nn.Module):
 
         return loss
 
-    def get_eval_loss(self, input_seq, input_edge_types, pred_seq,
+    def get_eval_loss(self, input_seq, input_masks, input_edge_types, pred_seq,
                       compute_naive=True,
                       compute_exact=True):
         mode = 'eval'
 
-        x, y = self.encoder(input_seq, input_edge_types, pred_seq, mode)
+        x, y = self.encoder(input_seq, input_masks, input_edge_types, pred_seq, mode)
 
         ### Importance sampled NLL estimate
         z, _ = self.encoder.get_z_and_kl_qp(x, y, mode)
@@ -129,10 +131,10 @@ class Predictor(nn.Module):
         return nll_q_is, nll_p, nll_exact
 
 
-    def predict(self, input_seqs, input_edge_types, num_samples, most_likely=False):
+    def predict(self, input_seqs, input_masks, input_edge_types, num_samples, most_likely=False):
         mode = 'predict'
 
-        x = self.encoder(input_seqs, input_edge_types, pred_seqs=None, mode=mode)
+        x = self.encoder(input_seqs, input_masks, input_edge_types, pred_seqs=None, mode=mode)
         # (bs, encoder.x_size)
         self.encoder.latent.p_dist = self.encoder.p_z_x(x, mode)
         z_p_samples = self.encoder.latent.sample_p(num_samples, mode, most_likely=most_likely)

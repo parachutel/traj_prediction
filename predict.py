@@ -78,13 +78,13 @@ def main(args):
     log.info(f'Test dataset size = {dataset_size}')
 
     vis_idxs = np.random.randint(0, dataset_size, args.n_vis) # n_vis = bs
-    input_seq, _, input_edge_types, pred_seq = test_loader.dataset[vis_idxs]
+    input_seq, input_masks, input_edge_types, pred_seq = test_loader.dataset[vis_idxs]
 
     # Predict
     log.info('Predicting...')
     if args.model == 'cvae':
         sampled_future, z_p_samples = model.predict(
-            input_seq, input_edge_types, args.n_z_samples_pred, most_likely=args.most_likely)
+            input_seq, input_masks, input_edge_types, args.n_z_samples_pred, most_likely=args.most_likely)
         # sampled_future.shape = (n_z_samples, n_vis, pred_seq_len, 2)
     elif args.model == 'vanilla':
         sampled_future = model.predict(input_seq, args.n_pred_steps)

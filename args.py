@@ -145,6 +145,10 @@ def get_args():
                         type=int,
                         default=128,
                         help='The hidden size of the node future encoder.')
+    parser.add_argument('--masked_ehe',
+                        type=lambda s: s.lower().startswith('t'),
+                        default=True,
+                        help='Whether to use the graph masked edge history encoder.')
 
     # DiscreteLatent
     parser.add_argument('--latent_input_size',

@@ -51,6 +51,7 @@ def main(args):
                       log_sigma_max=args.log_sigma_max,
                       log_p_yt_xz_max=args.log_p_yt_xz_max,
                       kl_weight=args.kl_weight,
+                      masked_ehe=args.masked_ehe,
                       device=device)
     
     if args.load_path:
@@ -105,9 +106,10 @@ def main(args):
         log.info(f'Starting epoch {epoch}...')
         with torch.enable_grad(), tqdm(total=len(train_loader.dataset)) as progress_bar:
             # One epoch:
-            for input_seq, _, input_edge_types, pred_seq in train_loader:
+            for input_seq, input_masks, input_edge_types, pred_seq in train_loader:
                 # Move to GPU if needed
                 input_seq = input_seq.to(device)
+                input_masks = input_masks.to(device)
                 input_edge_types = input_edge_types.to(device)
                 pred_seq = pred_seq.to(device)
 
@@ -115,7 +117,7 @@ def main(args):
                 optimizer.zero_grad()
 
                 # Forward
-                loss = model.get_training_loss(input_seq, input_edge_types, pred_seq)
+                loss = model.get_training_loss(input_seq, input_masks, input_edge_types, pred_seq)
                 loss_val = loss.item()
 
                 # Backward
@@ -161,16 +163,17 @@ def evaluate(model, data_loader, device):
 
     with torch.no_grad(), \
             tqdm(total=len(data_loader.dataset)) as progress_bar:
-        for input_seq, _, input_edge_types, pred_seq in data_loader:
+        for input_seq, input_masks, input_edge_types, pred_seq in data_loader:
             # Move to GPU if needed
             input_seq = input_seq.to(device)
+            input_masks = input_masks.to(device)
             input_edge_types = input_edge_types.to(device)
             pred_seq = pred_seq.to(device)
 
             batch_size = input_seq.size(0)
             # Forward
             nll_q_is, nll_p, nll_exact = \
-                model.get_eval_loss(input_seq, input_edge_types, pred_seq)
+                model.get_eval_loss(input_seq, input_masks, input_edge_types, pred_seq)
 
             nll_q_is_meter.update(nll_q_is.item(), batch_size)
             nll_p_meter.update(nll_p.item(), batch_size)

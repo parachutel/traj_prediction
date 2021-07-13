@@ -15,15 +15,17 @@ class Encoder(nn.Module):
                  nhe_hidden_size=128,
                  ehe_hidden_size=128,
                  nfe_hidden_size=128,
+                 masked_ehe=True,
                  device='cpu'):
         super().__init__()
         self.nhe_encoder = NodeHistroyEncoder(state_dim=state_dim,
                                               nhe_hidden_size=nhe_hidden_size,
                                               device=device)
-        self.ehe_encoder = EdgeHistoryEncoder(rel_state_dim=rel_state_dim,
-                                              edge_type_dim=edge_type_dim,
-                                              ehe_hidden_size=ehe_hidden_size,
-                                              device=device)
+        ehe_class = MaskedEdgeHistoryEncoder if masked_ehe else EdgeHistoryEncoder
+        self.ehe_encoder = ehe_class(rel_state_dim=rel_state_dim,
+                                     edge_type_dim=edge_type_dim,
+                                     ehe_hidden_size=ehe_hidden_size,
+                                     device=device)
         self.nfe_encoder = NodeFutureEncoder(state_dim=state_dim,
                                              nfe_hidden_size=nfe_hidden_size,
                                              device=device)
@@ -41,9 +43,9 @@ class Encoder(nn.Module):
                                      device=device)
         self.device = device
 
-    def forward(self, input_seqs, input_edge_types, pred_seqs=None, mode='training'):
+    def forward(self, input_seqs, input_masks, input_edge_types, pred_seqs=None, mode='training'):
         nhe = self.nhe_encoder(input_seqs, mode)
-        ehe = self.ehe_encoder(input_seqs, input_edge_types, mode)
+        ehe = self.ehe_encoder(input_seqs, input_masks, input_edge_types, mode)
         x = torch.cat([nhe, ehe], dim=-1)
         # (bs, x_size), time dimension is summarized by encoders
         if mode == 'predict':
@@ -133,6 +135,7 @@ class EdgeHistoryEncoder(nn.Module):
                  ehe_hidden_size=128,
                  device='cpu'):
         super().__init__()
+        print('Using EdgeHistoryEncoder')
         self.edge_info_fusion = nn.Linear(rel_state_dim + edge_type_dim + 9, 128)
         self.ehe = nn.LSTM(input_size=128,
                            hidden_size=ehe_hidden_size)
@@ -148,10 +151,11 @@ class EdgeHistoryEncoder(nn.Module):
 
         self.device = device
 
-    def forward(self, input_seqs, input_edge_types, mode):
+    def forward(self, input_seqs, input_masks, input_edge_types, mode):
         '''
             input_seqs.shape = (bs, seq, 3, 3, state_dim)
             input_edge_types.shape = (bs, seq, 3, 3, 4)
+            input_masks NOT used
         '''
         bs, seq_len = input_seqs.shape[0], input_seqs.shape[1]
         
@@ -187,9 +191,6 @@ class EdgeHistoryEncoder(nn.Module):
 
         query = query.transpose(1, 2) # (bs, 64, 9)
         att = key @ query / math.sqrt(64) # (bs, 9, 9)
-        # Mask out the center grid (indexed 4)
-        # tgt_node_mask = 
-        # att.masked_fill_(tgt_node_mask, -float('inf'))
         att = F.softmax(att, dim=-1) # (bs, 9, 9)
 
         edge_info = att @ value # (bs, 9, 64)
@@ -201,6 +202,98 @@ class EdgeHistoryEncoder(nn.Module):
         edge_info = F.dropout(edge_info,
                               p=args.rnn_dropout_prob,
                               training=(mode == 'training'))
+
+        return edge_info
+
+class MaskedEdgeHistoryEncoder(nn.Module):
+    def __init__(self,
+                 rel_state_dim=6,
+                 edge_type_dim=4,
+                 ehe_hidden_size=128,
+                 device='cpu'):
+        super().__init__()
+        print('Using MaskedEdgeHistoryEncoder')
+        self.edge_info_fusion = nn.Linear(rel_state_dim + edge_type_dim + 9, 64)
+        self.ehe = nn.LSTM(input_size=64,
+                           hidden_size=ehe_hidden_size)
+        # NOT batch_first, (seq, batch, feature)
+        # Single head self attention
+        self.k = nn.Linear(rel_state_dim, 64)
+        self.q = nn.Linear(64, 64)
+        self.v = nn.Linear(64, 64)
+
+        self.output_size = 64
+        self.output = nn.Linear(ehe_hidden_size, self.output_size)
+
+        self.device = device
+
+    def forward(self, input_seqs, input_masks, input_edge_types, mode):
+        '''
+            input_seqs.shape = (bs, seq, 3, 3, state_dim)
+            input_edge_types.shape = (bs, seq, 3, 3, 4)
+            input_masks.shape = (bs, seq, 3, 3)
+        '''
+        bs, seq_len = input_seqs.shape[0], input_seqs.shape[1]
+        
+        # Location onehot embeddings
+        loc_onehot = torch.eye(9).to(self.device) # (9, 9)
+        loc_onehot = loc_onehot.unsqueeze(0).unsqueeze(0) # (1, 1, 9, 9)
+        loc_onehot = loc_onehot.expand(bs, seq_len, -1, -1) # (bs, seq, 9, 9)
+        loc_onehot = loc_onehot.reshape(bs, seq_len, 3, 3, 9) # (bs, seq, 3, 3, 9)
+        
+        edge_info = torch.cat([input_seqs, input_edge_types, loc_onehot], dim=-1)
+        # (bs, seq, 3, 3, 4 + state_dim + 9)
+        edge_info = self.edge_info_fusion(edge_info)
+        # (bs, seq, 3, 3, fusion_dim)
+        edge_info = F.dropout(edge_info,
+                              p=args.rnn_dropout_prob,
+                              training=(mode == 'training'))
+        self_info = input_seqs[:, :, 1, 1]
+        # (bs, seq, state_dim)
+
+        # Reshaping:
+        edge_info = edge_info.reshape(bs, seq_len, 9, -1)
+        # (bs, seq, 9, fusion_dim)
+        self_info = self_info.unsqueeze(-2).expand(-1, -1, 9, -1)
+        # (bs, seq, 9, state_dim)
+
+        # Attention of self towards others:
+        key = self.k(self_info).unsqueeze(-2)
+        # (bs, seq, 9, 1, hidden_size)
+        query = self.q(edge_info).unsqueeze(-1)
+        # (bs, seq, 9, hidden_size, 1)
+        value = self.v(edge_info) # (bs, seq, 9, hidden_size)
+        att = key @ query / math.sqrt(key.shape[-1])
+        # (bs, seq, 9, 1, 1)
+        att = att.squeeze()
+        # (bs, seq, 9)
+
+        # Mask out the center grid and other empty nodes (where input_masks = 0)
+        inv_input_masks = (1 - input_masks.reshape(bs, seq_len, -1)).type(torch.BoolTensor)
+        # (bs, seq, 9)
+        # print(att[0,0])
+        # print(input_edge_types[0,0])
+        # print(inv_input_masks[0,0])
+        att.masked_fill_(inv_input_masks, -1e10) # -float('inf') is unstable
+        att = F.softmax(att, dim=-1) # (bs, seq, 9)
+        # print(att[0,0], att[0,0].sum())
+        att = att.unsqueeze(-1) # (bs, seq, 9, 1)
+        edge_info = att * value # (bs, seq, 9, hidden_size)
+        edge_info = edge_info.sum(-2) # (bs, seq, hidden_size), att weighted sum
+        
+        # LSTM
+        edge_info = edge_info.transpose(0, 1)
+        # (seq, bs, hidden_size)
+        edge_info, (_, _) = self.ehe(edge_info)
+        # (seq, bs, ehe_hidden_size)
+        edge_info = edge_info[-1] # take the last step
+        # (bs, ehe_hidden_size)
+
+        edge_info = F.dropout(edge_info,
+                              p=args.rnn_dropout_prob,
+                              training=(mode == 'training'))
+        
+        edge_info = self.output(edge_info) # (bs, 64)
 
         return edge_info
 

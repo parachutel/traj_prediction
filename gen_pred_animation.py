@@ -95,6 +95,7 @@ def gen_pred_animation(data_id=1, track_id=1, fps=20):
     with moviewriter.saving(fig, ANIMATION_PATH, dpi=300):
         for frame in tqdm(range(INPUT_SEQ_LEN, track.num_frames)):
             input_seq = track.state_tensors[frame - INPUT_SEQ_LEN : frame]
+            input_masks = track.graph_masks[frame - INPUT_SEQ_LEN : frame]
             input_edge_types = track.edge_type_tensors[frame - INPUT_SEQ_LEN : frame]
             assert len(input_seq) == INPUT_SEQ_LEN
     
@@ -103,7 +104,7 @@ def gen_pred_animation(data_id=1, track_id=1, fps=20):
             
             if args.model == 'cvae':
                 sampled_future, z_p_samples = model.predict(
-                    input_seq, input_edge_types, args.n_z_samples_pred, most_likely=False)
+                    input_seq, input_masks, input_edge_types, args.n_z_samples_pred, most_likely=False)
                 # sampled_future.shape = (n_z_samples_pred, 1, n_pred_steps, pred_dim), bs = 1
             elif args.model == 'vanilla':
                 sampled_future = model.predict(input_seq, args.n_pred_steps)

@@ -82,6 +82,7 @@ def eval_lane_pred_accuracy(model, track, device):
     with tqdm(total=len(range(INPUT_SEQ_LEN, track.num_frames - PRED_SEQ_LEN))) as progress_bar:
         for frame in range(INPUT_SEQ_LEN, track.num_frames - PRED_SEQ_LEN):
             input_seq = track.state_tensors[frame - INPUT_SEQ_LEN : frame]
+            input_masks = track.graph_masks[frame - INPUT_SEQ_LEN : frame]
             input_edge_types = track.edge_type_tensors[frame - INPUT_SEQ_LEN : frame]
     
             input_seq = torch.tensor(input_seq).float().to(device).unsqueeze(0)
@@ -89,7 +90,7 @@ def eval_lane_pred_accuracy(model, track, device):
 
             if args.model == 'cvae':
                 sampled_future, z_p_samples = model.predict(
-                    input_seq, input_edge_types, args.n_z_samples_pred, most_likely=False)
+                    input_seq, input_masks, input_edge_types, args.n_z_samples_pred, most_likely=False)
                 # sampled_future.shape = (n_z_samples_pred, 1, n_pred_steps, pred_dim), bs = 1
                 sampled_vels = sampled_future.squeeze().detach().cpu().numpy() # (n_z_samples_pred, pred_seq_len, 2)
             elif args.model == 'vanilla':
