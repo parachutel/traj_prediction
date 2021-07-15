@@ -24,16 +24,30 @@ def get_available_devices():
 def get_save_dir(args, training, name=None, id_max=100):
     base_dir = args.save_dir
     if name == None: 
-        name = args.name
-        name = '_'.join([
-            '{}'.format(args.name),
-            'bs={}'.format(args.train_batch_size),
-            'input={}'.format(args.input_seconds),
-            'pred={}'.format(args.pred_seconds),
-            'stride={}'.format(args.forward_shift_seconds),
-            'seed={}'.format(args.seed),
-            'run',
-        ])
+        if training:
+            name = '_'.join([
+                '{}'.format(args.name),
+                'maskedEHE={}'.format(args.masked_ehe),
+                'bs={}'.format(args.train_batch_size),
+                'input={}'.format(args.input_seconds),
+                'pred={}'.format(args.pred_seconds),
+                'stride={}'.format(args.forward_shift_seconds),
+                'seed={}'.format(args.seed),
+                'run',
+            ])
+        else:
+            name = '_'.join([
+                '{}'.format(args.name),
+                'maskedEHE={}'.format(args.masked_ehe),
+                'input={}'.format(args.input_seconds),
+                'pred={}'.format(args.pred_seconds),
+                'stride={}'.format(args.forward_shift_seconds),
+                'data={}'.format(args.dataset_id),
+                'nz={}'.format(args.n_z_samples_pred),
+                'nvis={}'.format(args.n_vis),
+                'seed={}'.format(args.seed),
+                'run',
+            ])
 
     for uid in range(1, id_max):
         subdir = 'train' if training else 'test'

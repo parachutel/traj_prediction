@@ -299,3 +299,5 @@ def get_args():
     return args
 
 args = get_args()
+
+args.n_pred_steps = args.pred_seconds * 25

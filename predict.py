@@ -72,7 +72,7 @@ def main(args):
     model.eval()
 
     log.info('Building dataset...')
-    test_data_list = [14]
+    test_data_list = [args.dataset_id]
     test_loader = build_highd_data_loader(test_data_list, args.eval_batch_size)
     dataset_size = len(test_loader.dataset)
     log.info(f'Test dataset size = {dataset_size}')
@@ -136,13 +136,13 @@ def main(args):
                 traj_y.append(y)
             plt.plot(traj_x, traj_y, color='red', alpha=0.5)
 
-        plt.legend(['Input Traj.', 'True Future Traj.', 'True Vel-Inferred Future Traj.', 'Predictions'])
+        # plt.legend(['Input Traj.', 'True Future Traj.', 'True Vel-Inferred Future Traj.', 'Predictions'])
         plt.xlabel('x (m)')
         plt.ylabel('y (m)')
         # plt.gcf().set_figwidth(25) # inches
         # plt.gca().set_aspect('equal', 'box')
-        plt.gcf().set_size_inches(20, 6)
-        plt.gca().set_xlim(0, 420)
+        plt.gcf().set_size_inches(6, 3) # 10 : 3
+        # plt.gca().set_xlim(0, 420)
         plt.gca().set_ylim(-6, 6)
         plt.tight_layout()
         plt.savefig(args.save_dir + f'/{traj_id}.png')

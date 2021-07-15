@@ -214,13 +214,18 @@ class MaskedEdgeHistoryEncoder(nn.Module):
         super().__init__()
         print('Using MaskedEdgeHistoryEncoder')
         self.edge_info_fusion = nn.Linear(rel_state_dim + edge_type_dim + 9, 64)
-        self.ehe = nn.LSTM(input_size=64,
+
+        self.n_heads = 4
+        self.att_size = 64
+        assert self.att_size % self.n_heads == 0
+        self.head_size = self.att_size // self.n_heads
+        self.k = nn.Linear(rel_state_dim, self.att_size)
+        self.q = nn.Linear(64, self.att_size)
+        self.v = nn.Linear(64, self.att_size)
+
+        self.ehe = nn.LSTM(input_size=self.att_size,
                            hidden_size=ehe_hidden_size)
         # NOT batch_first, (seq, batch, feature)
-        # Single head self attention
-        self.k = nn.Linear(rel_state_dim, 64)
-        self.q = nn.Linear(64, 64)
-        self.v = nn.Linear(64, 64)
 
         self.output_size = 64
         self.output = nn.Linear(ehe_hidden_size, self.output_size)
@@ -258,35 +263,55 @@ class MaskedEdgeHistoryEncoder(nn.Module):
         # (bs, seq, 9, state_dim)
 
         # Attention of self towards others:
-        key = self.k(self_info).unsqueeze(-2)
-        # (bs, seq, 9, 1, hidden_size)
-        query = self.q(edge_info).unsqueeze(-1)
-        # (bs, seq, 9, hidden_size, 1)
-        value = self.v(edge_info) # (bs, seq, 9, hidden_size)
-        att = key @ query / math.sqrt(key.shape[-1])
-        # (bs, seq, 9, 1, 1)
-        att = att.squeeze()
-        # (bs, seq, 9)
+        _att_shape = (bs, seq_len, 9, self.n_heads, self.head_size)
+        key = self.k(self_info).reshape(_att_shape).transpose(2, 3)
+        query = self.q(edge_info).reshape(_att_shape).transpose(2, 3)
+        value = self.v(edge_info).reshape(_att_shape).transpose(2, 3)
+        # (bs, seq, 9, att_size) -> (bs, seq, 9, n_heads, head_size) -> (bs, seq, n_heads, 9, head_size)
+        
+        # Create dot product shapes
+        key = key.unsqueeze(-2)
+        # (bs, seq, n_heads, 9, 1, head_size), 9 repeating self_info encoding
+        query = query.unsqueeze(-1)
+        # (bs, seq, n_heads, 9, head_size, 1), 9 distinct edge_info encoding
+
+        att = (key @ query).squeeze() / math.sqrt(self.head_size)
+        # (bs, seq, n_heads, 9), 9 weights of other nodes wrt self node
+
 
         # Mask out the center grid and other empty nodes (where input_masks = 0)
         inv_input_masks = (1 - input_masks.reshape(bs, seq_len, -1)).type(torch.BoolTensor)
         # (bs, seq, 9)
+        inv_input_masks = inv_input_masks.unsqueeze(-2)
+        # (bs, seq, 1, 9)
+        inv_input_masks = inv_input_masks.expand(-1, -1, self.n_heads, -1)
+        # (bs, seq, n_heads, 9), same mask for each head
+
         # print(att[0,0])
         # print(input_edge_types[0,0])
         # print(inv_input_masks[0,0])
+
         att.masked_fill_(inv_input_masks, -1e10) # -float('inf') is unstable
-        att = F.softmax(att, dim=-1) # (bs, seq, 9)
+        att = F.softmax(att, dim=-1) 
+        # (bs, seq, n_heads, 9)
+
         # print(att[0,0], att[0,0].sum())
-        att = att.unsqueeze(-1) # (bs, seq, 9, 1)
-        edge_info = att * value # (bs, seq, 9, hidden_size)
-        edge_info = edge_info.sum(-2) # (bs, seq, hidden_size), att weighted sum
+
+        att = att.unsqueeze(-1) # prepare for elementwise product with value
+        # (bs, seq, n_heads, 9, 1)
+        edge_info = att * value 
+        # (bs, seq, n_heads, 9, head_size)
+        edge_info = edge_info.contiguous().sum(-2) 
+        # (bs, seq, n_heads, head_size), att weighted sum for each head
+        edge_info = edge_info.reshape(bs, seq_len, -1)
+        # (bs, seq, att_size), att_size = hidden_size
         
         # LSTM
         edge_info = edge_info.transpose(0, 1)
         # (seq, bs, hidden_size)
         edge_info, (_, _) = self.ehe(edge_info)
         # (seq, bs, ehe_hidden_size)
-        edge_info = edge_info[-1] # take the last step
+        edge_info = edge_info[-1] # take the last step hidden
         # (bs, ehe_hidden_size)
 
         edge_info = F.dropout(edge_info,
