@@ -291,7 +291,7 @@ class MaskedEdgeHistoryEncoder(nn.Module):
         # print(input_edge_types[0,0])
         # print(inv_input_masks[0,0])
 
-        att.masked_fill_(inv_input_masks, -1e10) # -float('inf') is unstable
+        att.masked_fill_(inv_input_masks.to(self.device), -1e10) # -float('inf') is unstable
         att = F.softmax(att, dim=-1) 
         # (bs, seq, n_heads, 9)
 
