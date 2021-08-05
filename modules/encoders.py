@@ -219,9 +219,9 @@ class MaskedEdgeHistoryEncoder(nn.Module):
         self.att_size = 64
         assert self.att_size % self.n_heads == 0
         self.head_size = self.att_size // self.n_heads
-        self.k = nn.Linear(rel_state_dim, self.att_size)
-        self.q = nn.Linear(64, self.att_size)
-        self.v = nn.Linear(64, self.att_size)
+        self.k = nn.Linear(rel_state_dim, self.att_size, bias=False)
+        self.q = nn.Linear(64, self.att_size, bias=False)
+        self.v = nn.Linear(64, self.att_size, bias=False)
 
         self.ehe = nn.LSTM(input_size=self.att_size,
                            hidden_size=ehe_hidden_size)
@@ -350,13 +350,14 @@ class NodeFutureEncoder(nn.Module):
         curr_state = input_seqs[:, -1, 1, 1] # all batches, last step, center grid
         # (bs, state_dim)
         h0 = self.initial_h(curr_state) # (bs, nfe_hidden_size)
-        h0 = torch.stack([h0, torch.zeros_like(h0, device=self.device)], dim=0) # (2, bs, nfe_hidden_size)
+        h0 = torch.stack([h0, h0], dim=0) # (2, bs, nfe_hidden_size)
         c0 = self.initial_c(curr_state)# (bs, nfe_hidden_size)
-        c0 = torch.stack([c0, torch.zeros_like(c0, device=self.device)], dim=0) # (2, bs, nfe_hidden_size)
+        c0 = torch.stack([c0, c0], dim=0) # (2, bs, nfe_hidden_size)
         hiddens, (_, _) = self.nfe(node_state_futures, (h0, c0))
         # (seq, bs, hidden_size * 2)
         future_encoding = F.dropout(hiddens[-1],
                                     p=args.rnn_dropout_prob,
                                     training=(mode == 'training'))
         future_encoding = self.output(future_encoding) # (bs, 64)
+        # print('future_encoding', future_encoding)
         return future_encoding

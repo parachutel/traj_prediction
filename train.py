@@ -10,6 +10,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.optim.lr_scheduler as sched
+from torchinfo import summary as torchsummary
+# import pytorch_to_keras
+from torchviz import make_dot
 
 from predictor.predictor import Predictor
 from model_utils.annealer import step_annealers
@@ -28,6 +31,7 @@ def main(args):
     # device, args.gpu_ids = 'cpu', None
     log.info(f'Using device {device}...')
     log.info(f'Args: {dumps(vars(args), indent=4, sort_keys=True)}')
+    tbx.add_text('args', f'Args: {dumps(vars(args), indent=4, sort_keys=True)}', 0)
 
     # Set random seed
     log.info(f'Using random seed {args.seed}...')
@@ -59,7 +63,17 @@ def main(args):
         model, step = util.load_model(model, args.load_path, args.gpu_ids)
     else:
         step = 0
+
     model = model.to(device)
+
+    in_seq_len = args.input_seconds * 25
+    out_seq_len = args.pred_seconds * 25
+    input_shapes = [(2, in_seq_len, 3, 3, args.state_dim), 
+                    (2, in_seq_len, 3, 3), 
+                    (2, in_seq_len, 3, 3, 4), 
+                    (2, out_seq_len, 3, 3, args.state_dim)]
+    # torchsummary(model, input_shapes)
+
     model.train()
 
     # Get saver
@@ -86,6 +100,8 @@ def main(args):
     random.shuffle(args.data_list)
     train_data_list = args.data_list[:n_train_data_files]
     dev_data_list = args.data_list[n_train_data_files:]
+    train_data_list = [2]
+    dev_data_list = [2]
     print('train_data_list =', train_data_list)
     print('dev_data_list =', dev_data_list)
     # Dataset is on CPU first to save VRAM
@@ -107,6 +123,8 @@ def main(args):
         with torch.enable_grad(), tqdm(total=len(train_loader.dataset)) as progress_bar:
             # One epoch:
             for input_seq, input_masks, input_edge_types, pred_seq in train_loader:
+
+                input_seq, input_masks, input_edge_types, pred_seq = train_loader.dataset[0:128]
                 # Move to GPU if needed
                 input_seq = input_seq.to(device)
                 input_masks = input_masks.to(device)
@@ -118,11 +136,24 @@ def main(args):
 
                 # Forward
                 loss = model.get_training_loss(input_seq, input_masks, input_edge_types, pred_seq)
+                model.kl_weight = 1
                 loss_val = loss.item()
 
                 # Backward
                 loss.backward()
+
+                # total_norm = util.get_total_grad_norm(model)
+                # print('nonclipped_total_grad_norm =', total_norm)
+
                 nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
+
+                for i, (name, p) in enumerate(model.named_parameters()):
+                    print(i, name, p.shape, p.grad.data.norm(2).item())
+
+                total_norm = util.get_total_grad_norm(model)
+                # print('clipped_total_grad_norm =', total_norm)
+                tbx.add_scalar('train/clipped_grad_norm', total_norm, step)
+
                 optimizer.step()
                 
                 step += batch_size
@@ -136,6 +167,7 @@ def main(args):
                                          Loss=loss_val)
                 tbx.add_scalar('train/Loss', loss_val, step)
                 tbx.add_scalar('hyper_params/LR', optimizer.param_groups[0]['lr'], step)
+                exit()
 
         # End epoch
         epochs_till_eval -= 1

@@ -93,7 +93,10 @@ class DiscreteLatent(nn.Module):
 
 
     def kl_q_p(self):
-        kl_separated = td.kl_divergence(self.q_dist, self.p_dist)
+        # self.q_dist.probs.shape = (bs, N, K)
+        kl_separated = td.kl.kl_divergence(self.q_dist, self.p_dist)
+        # kl_separated.shape = (bs, N)
+        
         if len(kl_separated.shape) < 2:
             kl_separated = torch.unsqueeze(kl_separated, dim=0)
             

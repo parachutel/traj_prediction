@@ -58,6 +58,9 @@ class Predictor(nn.Module):
         self.annealed_var_names = []
         setup_hyperparams_annealing(self)
 
+    def forward(self, input_seq, input_masks, input_edge_types, pred_seq):
+        return self.get_training_loss(input_seq, input_masks, input_edge_types, pred_seq)
+
 
     def get_training_loss(self, input_seq, input_masks, input_edge_types, pred_seq):
         mode = 'training'
@@ -72,6 +75,21 @@ class Predictor(nn.Module):
             log_p_y_xz_mean = torch.mean(log_p_y_xz, dim=0) # (pred_dim,)
             log_likelihood = torch.mean(log_p_y_xz_mean) # (1,)
             ELBO = log_likelihood - self.kl_weight * kl
+
+            # Debug gradients
+            # torch.set_printoptions(profile="full")
+            # llh_grad = torch.autograd.grad(outputs=log_likelihood, 
+            #     inputs=self.encoder.latent.x_to_latent.weight, 
+            #     grad_outputs=torch.ones(log_likelihood.size()),
+            #     retain_graph=True)
+            # print('llh_grad', llh_grad)
+
+            # kl_grad = torch.autograd.grad(outputs=kl, 
+            #     inputs=self.encoder.latent.x_to_latent.weight, 
+            #     grad_outputs=torch.ones(kl.size()),
+            #     retain_graph=True)
+            # print('kl_grad', kl_grad)
+
             loss = -ELBO
 
         else:

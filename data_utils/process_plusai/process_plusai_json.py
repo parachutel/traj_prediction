@@ -6,12 +6,12 @@ import matplotlib.pyplot as plt
 
 from tqdm import tqdm
 
-from track import PlusAITrack
+from plusai_track import PlusAITrack
 
-dataset_name = 'batch_20191101T131603'
+# dataset_name = 'batch_20191101T131603'
 # dataset_name = 'batch_20191108T143338'
 # dataset_name = 'batch_20190614T164101'
-# dataset_name = 'batch_20200108T141022_changzhou'
+dataset_name = 'batch_20200108T141022_changzhou'
 dataset_parent_path = '../../data/raw_data/plusai/train/'
 
 
@@ -90,5 +90,6 @@ if __name__ == '__main__':
             # dys = np.array(traj.ys) - np.array(traj.ego_ys)
             # plt.plot(dxs, dys)
             plt.plot(traj.xs, traj.ys)
+            plt.plot(traj.ego_xs, traj.ego_ys, color='k')
             # plt.plot(traj.ego_xs, traj.ego_ys, color='red', linewidth=2)
-    plt.show()
+            plt.show()

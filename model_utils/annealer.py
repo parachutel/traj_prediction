@@ -115,4 +115,5 @@ def step_annealers(model, tbx, step):
             scheduler.step()
             annealed_var = dummy_optimizer.param_groups[0]['lr']
             rsetattr(model, var_name, annealed_var)
+            # print('hyper_params/' + var_name, annealed_var.item())
             tbx.add_scalar('hyper_params/' + var_name, annealed_var.item(), step)

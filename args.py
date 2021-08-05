@@ -166,7 +166,7 @@ def get_args():
     ### z has latent_dim ** n_latent_vars possible values
     parser.add_argument('--kl_min',
                         type=float,
-                        default=0.07,
+                        default=0.0,
                         help='The minimum KL divergence between q_z_xy and p_z_x.')
     ## DiscreteLatent: Relaxed One-Hot Temperature Annealing
     parser.add_argument('--temp_init',
@@ -188,7 +188,7 @@ def get_args():
                         help='Whether clip z logits when getting the distrubution of z from zero mean logits')
     parser.add_argument('--z_logit_clip_start',
                         type=float,
-                        default=0.05)
+                        default=0.1)
     parser.add_argument('--z_logit_clip_final',
                         type=float,
                         default=3.0)
@@ -291,7 +291,7 @@ def get_args():
                         default=False,
                         help='Whether print debug info.')
 
-    args = parser.parse_args()
+    args, unknown = parser.parse_known_args()
     
     args.data_list = list(range(1, 61))
     # args.data_list = [1, 2, 3]

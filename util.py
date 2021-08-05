@@ -5,10 +5,19 @@ import logging
 import tqdm
 import numpy as np
 import torch
-import torch.utils.data as data
 
 from args import args
 from random import randint
+
+def get_total_grad_norm(model, verbose=False):
+    total_norm = 0
+    for i, p in enumerate(model.parameters()):
+        param_norm = p.grad.data.norm(2)
+        if verbose:
+            print(i, param_norm)
+        total_norm += param_norm.item() ** 2
+    total_norm = total_norm ** (1. / 2)
+    return total_norm
 
 
 def get_available_devices():
