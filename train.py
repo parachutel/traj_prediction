@@ -66,13 +66,23 @@ def main(args):
 
     model = model.to(device)
 
-    in_seq_len = args.input_seconds * 25
-    out_seq_len = args.pred_seconds * 25
-    input_shapes = [(2, in_seq_len, 3, 3, args.state_dim), 
-                    (2, in_seq_len, 3, 3), 
-                    (2, in_seq_len, 3, 3, 4), 
-                    (2, out_seq_len, 3, 3, args.state_dim)]
-    # torchsummary(model, input_shapes)
+    # in_seq_len = args.input_seconds * args.highd_frame_rate
+    # out_seq_len = args.pred_seconds * args.highd_frame_rate
+    # bs = 2
+    # input_shapes = [(bs, in_seq_len, 3, 3, args.state_dim), 
+    #                 (bs, in_seq_len, 3, 3), 
+    #                 (bs, in_seq_len, 3, 3, args.n_edge_types), 
+    #                 (bs, out_seq_len, 3, 3, args.state_dim)]
+    # # torchsummary(model, input_shapes)
+
+    # input_names = ['input_seq', 'input_mask', 'input_edge_types', 'pred_seq']
+    # dummy_inputs = [torch.rand(shape).to(device) for shape in input_shapes]
+    # dummy_inputs = tuple(dummy_inputs)
+
+    # torch.onnx.export(model, dummy_inputs, args.save_dir + '/model.onnx', 
+    #     verbose=True, input_names=input_names, output_names='loss',
+    #     opset_version=12)
+    # exit()
 
     model.train()
 
@@ -124,7 +134,7 @@ def main(args):
             # One epoch:
             for input_seq, input_masks, input_edge_types, pred_seq in train_loader:
 
-                input_seq, input_masks, input_edge_types, pred_seq = train_loader.dataset[0:128]
+                # input_seq, input_masks, input_edge_types, pred_seq = train_loader.dataset[0:128]
                 # Move to GPU if needed
                 input_seq = input_seq.to(device)
                 input_masks = input_masks.to(device)
@@ -147,8 +157,8 @@ def main(args):
 
                 nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
 
-                for i, (name, p) in enumerate(model.named_parameters()):
-                    print(i, name, p.shape, p.grad.data.norm(2).item())
+                # for i, (name, p) in enumerate(model.named_parameters()):
+                #     print(i, name, p.shape, p.grad.data.norm(2).item())
 
                 total_norm = util.get_total_grad_norm(model)
                 # print('clipped_total_grad_norm =', total_norm)
@@ -167,7 +177,7 @@ def main(args):
                                          Loss=loss_val)
                 tbx.add_scalar('train/Loss', loss_val, step)
                 tbx.add_scalar('hyper_params/LR', optimizer.param_groups[0]['lr'], step)
-                exit()
+                # exit()
 
         # End epoch
         epochs_till_eval -= 1

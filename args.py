@@ -78,7 +78,7 @@ def get_args():
                         help='The number of trajecories to visualize.')
     parser.add_argument('--most_likely',
                         type=lambda s: s.lower().startswith('t'),
-                        default=False, # minimize nll
+                        default=True, # minimize nll
                         help='Whether to use the best z during prediction.')
     # Dataset
     parser.add_argument('--data_list', nargs='+', type=int)
@@ -100,6 +100,10 @@ def get_args():
                         type=int,
                         default=4,
                         help='The number of different types of vehicle interactions.')
+    parser.add_argument('--highd_frame_rate',
+                        type=int,
+                        default=25,
+                        help='Data point frame rate.')
     ## Data preparing
     parser.add_argument('--forward_shift_seconds',
                         type=int,
@@ -107,11 +111,11 @@ def get_args():
                         help='The number of seconds to shift when picking data segments.')
     parser.add_argument('--input_seconds',
                         type=int,
-                        default=4,
+                        default=2,
                         help='The number of seconds of input trajectories.')
     parser.add_argument('--pred_seconds',
                         type=int,
-                        default=2,
+                        default=6,
                         help='The number of seconds of prediction trajectories.')
     ## process_highd.py (to be renamed more clearly)
     parser.add_argument('--mode', default='pickle', type=str)
@@ -223,7 +227,7 @@ def get_args():
     ## Decoder: decoding_sample_model_prob
     parser.add_argument('--sample_model_during_dec',
                         type=lambda s: s.lower().startswith('t'),
-                        default=True,
+                        default=False,
                         help='Whether sample sample model during decoding (if False, use true future as inputs).')
     parser.add_argument('--dec_sample_model_prob_start',
                         type=float,
