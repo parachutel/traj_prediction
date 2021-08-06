@@ -1,6 +1,12 @@
 import torch
 import torch.nn as nn
 
+import os
+import sys
+current_file_path = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_file_path + '/../')
+
+from args import args
 from modules.gmm import GMMParams, GMM2D
 from torch.distributions import Bernoulli
 
@@ -38,8 +44,40 @@ class Decoder(nn.Module):
         self.decoding_sample_model_prob = None # set by annealer
         self.device = device
 
+    def forward(self, x, z, input_seqs):
+        '''
+            prediction mode for onnx export
+        '''
+        print('Calling Decoder.forward() for onnx export...')
+        n_z_samples = args.n_z_samples_pred
+        n_pred_steps = args.n_pred_steps
+
+        # n_pred_steps = 3
+
+        z = z.reshape(-1, z.shape[-1]) # (bs * n_z_samples, z_dim)
+        zx = torch.cat([z, x.repeat(n_z_samples, 1)], dim=1) # (bs * n_z_samples, z_dim + x_dim)
+        rnn_state = (self.initial_h(zx), self.initial_c(zx)) # (bs * n_z_samples, decoder_hidden_size)
+
+        tgt_prediction_present = input_seqs[:, -1, 1, 1, 2:4] # (x_dot, y_dot)
+        input_ = torch.cat([zx, tgt_prediction_present.repeat(n_z_samples, 1)], dim=-1)
+
+        y = []
+        for t in range(n_pred_steps):
+            h_state, c_state = self.lstm_cell(input_, rnn_state)
+            log_pi_t, mu_t, log_sigma_t, corr_t = self.gmm_params(h_state)
+            
+            y_t = GMM2D(log_pi_t, mu_t, log_sigma_t, corr_t,
+                        self.log_sigma_min, self.log_sigma_max, self.device).sample()
+            
+            y.append(y_t)
+            input_ = torch.cat([zx, y_t], dim=1)
+            rnn_state = (h_state, c_state)
+
+        sampled_future = torch.stack(y, dim=1).reshape(n_z_samples, -1, n_pred_steps, self.pred_dim)
+        return sampled_future
+
     def p_y_xz(self, x, z_stacked, n_z_samples, input_seqs, pred_seqs=None,
-               n_pred_steps=None, mode='training', sample_model_during_decoding=True):
+               n_pred_steps=None, mode='training', sample_model_during_decoding=False):
 
         # x is the output of history encoders
         # input_seqs (bs, input_seq_len, 3, 3, state_dim)
@@ -150,7 +188,7 @@ class Decoder(nn.Module):
             return y_dist
 
     def log_p_y_xz(self, x, z, n_z_samples, input_seqs, pred_seqs=None, n_pred_steps=None, 
-                   mode='training', sample_model_during_decoding=True):
+                   mode='training', sample_model_during_decoding=False):
         y_dist = self.p_y_xz(x, z, n_z_samples, input_seqs, pred_seqs, n_pred_steps, mode=mode,
                              sample_model_during_decoding=sample_model_during_decoding)
         # y_dist.sample (n_z_samples, bs, n_pred_steps, pred_dim)
@@ -160,3 +198,32 @@ class Decoder(nn.Module):
         log_p_yt_xz = y_dist.log_prob(true_tgt_future)
         log_p_y_xz = log_p_yt_xz.sum(dim=2) # sum through time dimension, (bs, 2)
         return log_p_y_xz
+
+
+if __name__ == '__main__':
+    from modules.encoders import Encoder
+    from args import args
+    device = 'cpu'
+
+    encoder = Encoder()
+    decoder = Decoder(encoder.x_size, encoder.latent.z_dim)
+
+    in_seq_len = args.input_seconds * args.highd_frame_rate
+    bs = 1
+
+    input_seqs = torch.rand(bs, in_seq_len, 3, 3, args.state_dim).to(device)
+    input_masks = torch.rand(bs, in_seq_len, 3, 3)
+    input_edge_types = torch.rand(bs, in_seq_len, 3, 3, args.n_edge_types)
+    x = encoder(input_seqs, input_masks, input_edge_types, mode='predict')
+    encoder.latent.p_dist = encoder.p_z_x(x, 'predict')
+    z = encoder.latent.sample_p(args.n_z_samples_pred, mode='predict', most_likely=True)
+    
+
+
+    input_names = ['x', 'z', 'input_seqs']
+    dummy_inputs = (x, z, input_seqs)
+
+    torch.onnx.export(decoder, dummy_inputs, '../save/tmp/decoder.onnx', 
+        verbose=True, input_names=input_names, 
+        output_names=['sampled_future'],
+        opset_version=11)

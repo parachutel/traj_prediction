@@ -41,8 +41,10 @@ class DiscreteLatent(nn.Module):
         else:
             logits = logits_separated_mean_zero
         
-        if logits.shape[0] == 1:
-            logits = torch.squeeze(logits, dim=0)
+        # print(logits.shape)
+        # if logits.shape[0] == 1:
+        #     logits = torch.squeeze(logits, dim=0)
+        # print(logits.shape)
         
         return td.OneHotCategorical(logits=logits) # (bs, N, K)
 
@@ -72,7 +74,8 @@ class DiscreteLatent(nn.Module):
             # Sampling the most likely z from p(z|x).
             # self.p_dist.event_shape returns the shape of a single sample (without batching)
             # self.p_dist.event_shape = (K,)
-            eye_mat = torch.eye(self.p_dist.event_shape[-1], device=self.device)
+            # eye_mat = torch.eye(self.p_dist.event_shape[-1], device=self.device)
+            eye_mat = torch.eye(self.K, device=self.device)
             # eye_mat.shape = (K, K)
             # self.p_dist.probs.shape = (bs, N, K)
             argmax_idxs = torch.argmax(self.p_dist.probs, dim=-1)

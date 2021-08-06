@@ -10,6 +10,18 @@ def to_one_hot(labels, n_labels, device):
 def reshape_to_components(tensor, GMM_c):
     return tensor.reshape(tensor.shape[:-1] + (GMM_c, -1))
 
+class MyCategorical(Categorical):
+    def __init__(self, logits):
+        super().__init__(logits=logits)
+
+    def sample(self, sample_shape=torch.Size()):
+        if not isinstance(sample_shape, torch.Size):
+            sample_shape = torch.Size(sample_shape)
+        probs_2d = self.probs.reshape(-1, self._num_events)
+        samples_2d = torch.multinomial(probs_2d, sample_shape.numel(), True)
+        samples_2d = samples_2d.transpose(0, 1) # instead of .T
+        return samples_2d.reshape(self._extended_shape(sample_shape))
+
 class GMMParams(nn.Module):
     def __init__(self,
                  decoder_hidden_size=64,
@@ -63,7 +75,7 @@ class GMM2D(object):
         self.sigmas = sigmas                  # [..., GMM_c, 2]
         self.corrs = corrs                    # [..., GMM_c]
         self.one_minus_rho2 = one_minus_rho2  # [..., GMM_c]
-        self.cat = Categorical(logits=log_pis)
+        self.cat = MyCategorical(logits=log_pis)
 
 
     def sample(self):
@@ -86,7 +98,7 @@ class GMM2D(object):
              2 * self.corrs * torch.prod(dx, dim=-1) / torch.prod(self.sigmas, dim=-1)) # [..., GMM_c]
         component_log_p = -(torch.log(self.one_minus_rho2) + 2 * torch.sum(self.log_sigmas, dim=-1) +
                             z / self.one_minus_rho2 +
-                            2 * np.log(2 * np.pi)) / 2
+                            2 * torch.log(2 * np.pi)) / 2
         return torch.logsumexp(self.log_pis + component_log_p, dim=-1)
 
 

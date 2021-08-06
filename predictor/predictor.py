@@ -3,6 +3,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
+import os
+import sys
+current_file_path = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_file_path + '/../')
+
 from modules.encoders import Encoder
 from modules.decoder import Decoder
 from modules.latent import all_one_hot_combinations
@@ -58,8 +63,15 @@ class Predictor(nn.Module):
         self.annealed_var_names = []
         setup_hyperparams_annealing(self)
 
-    def forward(self, input_seq, input_masks, input_edge_types, pred_seq):
-        return self.get_training_loss(input_seq, input_masks, input_edge_types, pred_seq)
+    def forward(self, input_seq, input_masks, input_edge_types):
+        '''
+            for exporting to onnx only
+        '''
+        x = self.encoder(input_seqs, input_masks, input_edge_types, mode='predict')
+        self.encoder.latent.p_dist = self.encoder.p_z_x(x, 'predict')
+        z = self.encoder.latent.sample_p(args.n_z_samples_pred, mode='predict', most_likely=True)
+        log_pi_t, mu_t, log_sigma_t, corr_t, zx = self.decoder(x, z, input_seqs)
+        return log_pi_t, mu_t, log_sigma_t, corr_t, zx
 
 
     def get_training_loss(self, input_seq, input_masks, input_edge_types, pred_seq):
@@ -79,10 +91,11 @@ class Predictor(nn.Module):
             # Debug gradients
             # torch.set_printoptions(profile="full")
             # llh_grad = torch.autograd.grad(outputs=log_likelihood, 
-            #     inputs=self.encoder.latent.x_to_latent.weight, 
+            #     inputs=self.encoder.latent_xy_input_mlp.weight, 
             #     grad_outputs=torch.ones(log_likelihood.size()),
             #     retain_graph=True)
-            # print('llh_grad', llh_grad)
+            # print('llh', log_likelihood)
+            # print('llh_grad', llh_grad[0].mean())
 
             # kl_grad = torch.autograd.grad(outputs=kl, 
             #     inputs=self.encoder.latent.x_to_latent.weight, 
@@ -160,3 +173,19 @@ class Predictor(nn.Module):
                                                      n_pred_steps=args.n_pred_steps,
                                                      mode=mode)
         return sampled_future, z_p_samples
+
+
+if __name__ == '__main__':
+    predictor = Predictor()
+    in_seq_len = args.input_seconds * args.highd_frame_rate
+    bs = 1
+    input_seqs = torch.rand(bs, in_seq_len, 3, 3, args.state_dim)
+    input_masks = torch.rand(bs, in_seq_len, 3, 3)
+    input_edge_types = torch.rand(bs, in_seq_len, 3, 3, args.n_edge_types)
+    input_names = ['input_seq', 'input_mask', 'input_edge_types']
+    dummy_inputs = (input_seqs, input_masks, input_edge_types)
+
+    torch.onnx.export(predictor, dummy_inputs, '../save/tmp/predictor.onnx', 
+        verbose=False, input_names=input_names, 
+        output_names=['log_pi_t', 'mu_t', 'log_sigma_t', 'corr_t', 'zx'],
+        opset_version=12)

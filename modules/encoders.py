@@ -3,6 +3,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+import os
+import sys
+current_file_path = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_file_path + '/../')
+
 from modules.latent import DiscreteLatent
 
 from args import args
@@ -43,7 +48,7 @@ class Encoder(nn.Module):
                                      device=device)
         self.device = device
 
-    def forward(self, input_seqs, input_masks, input_edge_types, pred_seqs=None, mode='training'):
+    def forward(self, input_seqs, input_masks, input_edge_types, pred_seqs=None, mode='predict'):
         nhe = self.nhe_encoder(input_seqs, mode)
         ehe = self.ehe_encoder(input_seqs, input_masks, input_edge_types, mode)
         x = torch.cat([nhe, ehe], dim=-1)
@@ -58,20 +63,20 @@ class Encoder(nn.Module):
     def q_z_xy(self, x, y, mode):
         xy = torch.cat([x, y], dim=-1)
 
-        h_xy = F.relu(self.latent_xy_input_mlp(xy))
-        h_xy = F.dropout(h_xy, 
-                         p=args.mlp_dropout_prob,
-                         training=(mode == 'training'))
+        h_xy = F.leaky_relu(self.latent_xy_input_mlp(xy))
+        # h_xy = F.dropout(h_xy, 
+        #                  p=args.mlp_dropout_prob,
+        #                  training=(mode == 'training'))
         h_xy = self.latent.xy_to_latent(h_xy) # z_dim
         # self.latent.q_dist
         return self.latent.z_dist_from_hidden(h_xy, mode)
 
 
     def p_z_x(self, x, mode):
-        h_x = F.relu(self.latent_x_input_mlp(x))
-        h_x = F.dropout(h_x, 
-                        p=args.mlp_dropout_prob,
-                        training=(mode == 'training'))
+        h_x = F.leaky_relu(self.latent_x_input_mlp(x))
+        # h_x = F.dropout(h_x, 
+        #                 p=args.mlp_dropout_prob,
+        #                 training=(mode == 'training'))
         h_x = self.latent.x_to_latent(h_x) # z_dim
         # self.latent.p_dist
         return self.latent.z_dist_from_hidden(h_x, mode)
@@ -122,9 +127,9 @@ class NodeHistroyEncoder(nn.Module):
         hiddens, (_, _) = self.nhe(node_state_histories)
         # (seq, bs, hidden_size)
         outputs = hiddens[-1] # (bs, hidden_size), last step hidden state
-        outputs = F.dropout(outputs,
-                            p=args.rnn_dropout_prob,
-                            training=(mode == 'training'))
+        # outputs = F.dropout(outputs,
+        #                     p=args.rnn_dropout_prob,
+        #                     training=(mode == 'training'))
         return outputs
 
 
@@ -195,7 +200,7 @@ class EdgeHistoryEncoder(nn.Module):
 
         edge_info = att @ value # (bs, 9, 64)
 
-        edge_info = F.relu(self.output_reshaper(edge_info)) # (bs, 9, 16)
+        edge_info = F.leaky_relu(self.output_reshaper(edge_info)) # (bs, 9, 16)
         edge_info = edge_info.reshape(bs, -1) # (bs, 9 * 16)
         edge_info = self.output(edge_info) # (bs, 64)
 
@@ -250,9 +255,9 @@ class MaskedEdgeHistoryEncoder(nn.Module):
         # (bs, seq, 3, 3, 4 + state_dim + 9)
         edge_info = self.edge_info_fusion(edge_info)
         # (bs, seq, 3, 3, fusion_dim)
-        edge_info = F.dropout(edge_info,
-                              p=args.rnn_dropout_prob,
-                              training=(mode == 'training'))
+        # edge_info = F.dropout(edge_info,
+        #                       p=args.rnn_dropout_prob,
+        #                       training=(mode == 'training'))
         self_info = input_seqs[:, :, 1, 1]
         # (bs, seq, state_dim)
 
@@ -275,7 +280,7 @@ class MaskedEdgeHistoryEncoder(nn.Module):
         query = query.unsqueeze(-1)
         # (bs, seq, n_heads, 9, head_size, 1), 9 distinct edge_info encoding
 
-        att = (key @ query).squeeze() / math.sqrt(self.head_size)
+        att = (key @ query).squeeze(-1).squeeze(-1) / math.sqrt(self.head_size)
         # (bs, seq, n_heads, 9), 9 weights of other nodes wrt self node
 
 
@@ -314,9 +319,9 @@ class MaskedEdgeHistoryEncoder(nn.Module):
         edge_info = edge_info[-1] # take the last step hidden
         # (bs, ehe_hidden_size)
 
-        edge_info = F.dropout(edge_info,
-                              p=args.rnn_dropout_prob,
-                              training=(mode == 'training'))
+        # edge_info = F.dropout(edge_info,
+        #                       p=args.rnn_dropout_prob,
+        #                       training=(mode == 'training'))
         
         edge_info = self.output(edge_info) # (bs, 64)
 
@@ -355,9 +360,29 @@ class NodeFutureEncoder(nn.Module):
         c0 = torch.stack([c0, c0], dim=0) # (2, bs, nfe_hidden_size)
         hiddens, (_, _) = self.nfe(node_state_futures, (h0, c0))
         # (seq, bs, hidden_size * 2)
-        future_encoding = F.dropout(hiddens[-1],
-                                    p=args.rnn_dropout_prob,
-                                    training=(mode == 'training'))
+        # future_encoding = F.dropout(hiddens[-1],
+        #                             p=args.rnn_dropout_prob,
+        #                             training=(mode == 'training'))
+        future_encoding = hiddens[-1]
         future_encoding = self.output(future_encoding) # (bs, 64)
         # print('future_encoding', future_encoding)
         return future_encoding
+
+
+if __name__ == '__main__':
+    device = 'cpu'
+    model = Encoder()
+    in_seq_len = args.input_seconds * args.highd_frame_rate
+    out_seq_len = args.pred_seconds * args.highd_frame_rate
+    bs = 1
+    input_shapes = [(bs, in_seq_len, 3, 3, args.state_dim), 
+                    (bs, in_seq_len, 3, 3), 
+                    (bs, in_seq_len, 3, 3, args.n_edge_types)]
+
+    input_names = ['input_seq', 'input_mask', 'input_edge_types']
+    dummy_inputs = [torch.rand(shape).to(device) for shape in input_shapes]
+    dummy_inputs = tuple(dummy_inputs)
+
+    torch.onnx.export(model, dummy_inputs, '../save/tmp/encoder.onnx', 
+        verbose=False, input_names=input_names, output_names=['x'],
+        opset_version=12)

@@ -3,3 +3,5 @@ data/
 save/
 *.png
 .ipynb_checkpoints/
+.out
+NumCpp/
