@@ -101,8 +101,8 @@ def main(args):
     random.shuffle(args.data_list)
     train_data_list = args.data_list[:n_train_data_files]
     dev_data_list = args.data_list[n_train_data_files:]
-    train_data_list = [2]
-    dev_data_list = [2]
+    # train_data_list = [2]
+    # dev_data_list = [2]
     print('train_data_list =', train_data_list)
     print('dev_data_list =', dev_data_list)
     # Dataset is on CPU first to save VRAM
