@@ -48,11 +48,10 @@ class Decoder(nn.Module):
         '''
             prediction mode for onnx export
         '''
-        print('Calling Decoder.forward() for onnx export...')
         n_z_samples = args.n_z_samples_pred
-        n_pred_steps = args.n_pred_steps
+        # n_pred_steps = args.n_pred_steps
 
-        # n_pred_steps = 3
+        n_pred_steps = 150
 
         z = z.reshape(-1, z.shape[-1]) # (bs * n_z_samples, z_dim)
         zx = torch.cat([z, x.repeat(n_z_samples, 1)], dim=1) # (bs * n_z_samples, z_dim + x_dim)
@@ -67,7 +66,9 @@ class Decoder(nn.Module):
             log_pi_t, mu_t, log_sigma_t, corr_t = self.gmm_params(h_state)
             
             y_t = GMM2D(log_pi_t, mu_t, log_sigma_t, corr_t,
-                        self.log_sigma_min, self.log_sigma_max, self.device).sample()
+                        self.log_sigma_min, self.log_sigma_max, self.device,
+                        args.gmm_components).sample()
+            # (bs * n_z_samples, pred_dim)
             
             y.append(y_t)
             input_ = torch.cat([zx, y_t], dim=1)
@@ -202,14 +203,12 @@ class Decoder(nn.Module):
 
 if __name__ == '__main__':
     from modules.encoders import Encoder
-    from args import args
     device = 'cpu'
-
-    encoder = Encoder()
-    decoder = Decoder(encoder.x_size, encoder.latent.z_dim)
-
     in_seq_len = args.input_seconds * args.highd_frame_rate
     bs = 1
+
+    encoder = Encoder()
+    decoder = Decoder(encoder.x_size, encoder.latent.z_dim) 
 
     input_seqs = torch.rand(bs, in_seq_len, 3, 3, args.state_dim).to(device)
     input_masks = torch.rand(bs, in_seq_len, 3, 3)
@@ -217,8 +216,6 @@ if __name__ == '__main__':
     x = encoder(input_seqs, input_masks, input_edge_types, mode='predict')
     encoder.latent.p_dist = encoder.p_z_x(x, 'predict')
     z = encoder.latent.sample_p(args.n_z_samples_pred, mode='predict', most_likely=True)
-    
-
 
     input_names = ['x', 'z', 'input_seqs']
     dummy_inputs = (x, z, input_seqs)
@@ -226,4 +223,4 @@ if __name__ == '__main__':
     torch.onnx.export(decoder, dummy_inputs, '../save/tmp/decoder.onnx', 
         verbose=True, input_names=input_names, 
         output_names=['sampled_future'],
-        opset_version=11)
+        opset_version=12)

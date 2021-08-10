@@ -29,4 +29,4 @@ dummy_inputs = dict(dummy_inputs)
 
 outputs = predictor.run(None, dummy_inputs)
 
-print(outputs[0].shape, outputs[1].shape, outputs[2].shape, outputs[3].shape)
+print(outputs[0].shape, end - start)

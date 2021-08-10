@@ -68,21 +68,12 @@ def main(args):
 
     # in_seq_len = args.input_seconds * args.highd_frame_rate
     # out_seq_len = args.pred_seconds * args.highd_frame_rate
-    # bs = 2
+    # bs = 1
     # input_shapes = [(bs, in_seq_len, 3, 3, args.state_dim), 
     #                 (bs, in_seq_len, 3, 3), 
     #                 (bs, in_seq_len, 3, 3, args.n_edge_types), 
     #                 (bs, out_seq_len, 3, 3, args.state_dim)]
-    # # torchsummary(model, input_shapes)
-
-    # input_names = ['input_seq', 'input_mask', 'input_edge_types', 'pred_seq']
-    # dummy_inputs = [torch.rand(shape).to(device) for shape in input_shapes]
-    # dummy_inputs = tuple(dummy_inputs)
-
-    # torch.onnx.export(model, dummy_inputs, args.save_dir + '/model.onnx', 
-    #     verbose=True, input_names=input_names, output_names='loss',
-    #     opset_version=12)
-    # exit()
+    # torchsummary(model, input_shapes)
 
     model.train()
 

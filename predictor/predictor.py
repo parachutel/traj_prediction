@@ -31,6 +31,7 @@ class Predictor(nn.Module):
                  log_p_yt_xz_max=args.log_p_yt_xz_max,
                  kl_weight=args.kl_weight,
                  masked_ehe=args.masked_ehe,
+                 create_annealers=True,
                  device='cpu'):
 
         super().__init__()
@@ -61,17 +62,19 @@ class Predictor(nn.Module):
         self.schedulers = []
         self.dummy_optimizers = []
         self.annealed_var_names = []
-        setup_hyperparams_annealing(self)
+        if create_annealers:
+            setup_hyperparams_annealing(self)
 
     def forward(self, input_seq, input_masks, input_edge_types):
         '''
             for exporting to onnx only
         '''
+        print('[+] Calling Predictor.forward() for onnx export...')
         x = self.encoder(input_seqs, input_masks, input_edge_types, mode='predict')
         self.encoder.latent.p_dist = self.encoder.p_z_x(x, 'predict')
         z = self.encoder.latent.sample_p(args.n_z_samples_pred, mode='predict', most_likely=True)
-        log_pi_t, mu_t, log_sigma_t, corr_t, zx = self.decoder(x, z, input_seqs)
-        return log_pi_t, mu_t, log_sigma_t, corr_t, zx
+        sampled_future = self.decoder(x, z, input_seqs)
+        return sampled_future.squeeze(1)
 
 
     def get_training_loss(self, input_seq, input_masks, input_edge_types, pred_seq):
@@ -175,8 +178,7 @@ class Predictor(nn.Module):
         return sampled_future, z_p_samples
 
 
-if __name__ == '__main__':
-    predictor = Predictor()
+def export(predictor, path, opset_version=12):
     in_seq_len = args.input_seconds * args.highd_frame_rate
     bs = 1
     input_seqs = torch.rand(bs, in_seq_len, 3, 3, args.state_dim)
@@ -185,7 +187,7 @@ if __name__ == '__main__':
     input_names = ['input_seq', 'input_mask', 'input_edge_types']
     dummy_inputs = (input_seqs, input_masks, input_edge_types)
 
-    torch.onnx.export(predictor, dummy_inputs, '../save/tmp/predictor.onnx', 
-        verbose=False, input_names=input_names, 
-        output_names=['log_pi_t', 'mu_t', 'log_sigma_t', 'corr_t', 'zx'],
-        opset_version=12)
+    torch.onnx.export(predictor, dummy_inputs, f'{path}.onnx', 
+        verbose=True, input_names=input_names, 
+        output_names=['sampled_future'],
+        opset_version=opset_version)

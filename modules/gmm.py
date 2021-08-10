@@ -45,7 +45,7 @@ class GMMParams(nn.Module):
 
 class GMM2D(object):
     def __init__(self, log_pis, mus, log_sigmas, corrs, 
-                 clip_lo=-10, clip_hi=10, device='cpu'):
+                 clip_lo=-10, clip_hi=10, device='cpu', gmm_components=None):
         self.device = device
 
         # GMM_c: GMM components
@@ -53,7 +53,10 @@ class GMM2D(object):
         # mus: [..., GMM_c * 2]
         # sigmas: [..., GMM_c * 2]
         # corrs: [..., GMM_c]
-        GMM_c = log_pis.shape[-1]
+        if gmm_components is None:
+            GMM_c = log_pis.shape[-1]
+        else:
+            GMM_c = gmm_components
 
         # Sigma = [s1^2    p*s1*s2      L = [s1   0
         #          p*s1*s2 s2^2 ]            p*s2 sqrt(1-p^2)*s2]
