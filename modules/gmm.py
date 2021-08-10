@@ -101,7 +101,7 @@ class GMM2D(object):
              2 * self.corrs * torch.prod(dx, dim=-1) / torch.prod(self.sigmas, dim=-1)) # [..., GMM_c]
         component_log_p = -(torch.log(self.one_minus_rho2) + 2 * torch.sum(self.log_sigmas, dim=-1) +
                             z / self.one_minus_rho2 +
-                            2 * torch.log(2 * np.pi)) / 2
+                            2 * np.log(2 * np.pi)) / 2
         return torch.logsumexp(self.log_pis + component_log_p, dim=-1)
 
 
