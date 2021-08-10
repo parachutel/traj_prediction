@@ -10,9 +10,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.optim.lr_scheduler as sched
-from torchinfo import summary as torchsummary
+# from torchinfo import summary as torchsummary
 # import pytorch_to_keras
-from torchviz import make_dot
+# from torchviz import make_dot
 
 from predictor.predictor import Predictor
 from model_utils.annealer import step_annealers
