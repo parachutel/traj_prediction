@@ -49,9 +49,9 @@ class Decoder(nn.Module):
             prediction mode for onnx export
         '''
         n_z_samples = args.n_z_samples_pred
-        # n_pred_steps = args.n_pred_steps
+        n_pred_steps = int(args.n_pred_steps)
 
-        n_pred_steps = 150
+        # n_pred_steps = 150
 
         z = z.reshape(-1, z.shape[-1]) # (bs * n_z_samples, z_dim)
         zx = torch.cat([z, x.repeat(n_z_samples, 1)], dim=1) # (bs * n_z_samples, z_dim + x_dim)

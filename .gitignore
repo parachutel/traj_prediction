@@ -4,4 +4,7 @@ save/
 *.png
 .ipynb_checkpoints/
 .out
+*.o
 NumCpp/
+build/
+onnxruntime/

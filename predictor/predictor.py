@@ -70,10 +70,10 @@ class Predictor(nn.Module):
             for exporting to onnx only
         '''
         print('[+] Calling Predictor.forward() for onnx export...')
-        x = self.encoder(input_seqs, input_masks, input_edge_types, mode='predict')
+        x = self.encoder(input_seq, input_masks, input_edge_types, mode='predict')
         self.encoder.latent.p_dist = self.encoder.p_z_x(x, 'predict')
         z = self.encoder.latent.sample_p(args.n_z_samples_pred, mode='predict', most_likely=True)
-        sampled_future = self.decoder(x, z, input_seqs)
+        sampled_future = self.decoder(x, z, input_seq)
         return sampled_future.squeeze(1)
 
 
@@ -177,17 +177,3 @@ class Predictor(nn.Module):
                                                      mode=mode)
         return sampled_future, z_p_samples
 
-
-def export(predictor, path, opset_version=12):
-    in_seq_len = args.input_seconds * args.highd_frame_rate
-    bs = 1
-    input_seqs = torch.rand(bs, in_seq_len, 3, 3, args.state_dim)
-    input_masks = torch.rand(bs, in_seq_len, 3, 3)
-    input_edge_types = torch.rand(bs, in_seq_len, 3, 3, args.n_edge_types)
-    input_names = ['input_seq', 'input_mask', 'input_edge_types']
-    dummy_inputs = (input_seqs, input_masks, input_edge_types)
-
-    torch.onnx.export(predictor, dummy_inputs, f'{path}.onnx', 
-        verbose=True, input_names=input_names, 
-        output_names=['sampled_future'],
-        opset_version=opset_version)

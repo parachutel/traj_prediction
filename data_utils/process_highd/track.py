@@ -257,6 +257,7 @@ class Track:
             # 'n' prefix for 'neighbor'
             neighbors = self.neighbors[:, frame_idx]
             for neighbor_idx, n_uuid in enumerate(neighbors):
+                # n_ stands for neighbor
                 if n_uuid is not None:
                     n_track = uuid_to_track[n_uuid]
                     n_frame_idx = list(n_track.frames).index(frame)

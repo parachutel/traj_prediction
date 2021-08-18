@@ -25,6 +25,10 @@ def get_args():
                         type=str,
                         default=None,
                         help='The path to an existing checkpoint.')
+    parser.add_argument('--export_onnx',
+                        type=lambda s: s.lower().startswith('t'),
+                        default=False,
+                        help='Whether export to onnx.')
     parser.add_argument('--max_checkpoints',
                         type=int,
                         default=10,
@@ -43,7 +47,7 @@ def get_args():
                         help='The batch size during training')
     parser.add_argument('--eval_batch_size',
                         type=int,
-                        default=1024,
+                        default=512,
                         help='The batch size during eval')
     parser.add_argument('--num_epochs',
                         type=int,

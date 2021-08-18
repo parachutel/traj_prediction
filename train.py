@@ -1,4 +1,5 @@
 import math
+import os
 import numpy as np
 import random
 from json import dumps
@@ -59,7 +60,7 @@ def main(args):
                       device=device)
     
     if args.load_path:
-        log.info(f'Loading checkpoint from {args.load_path}...')
+        print(f'Loading checkpoint from {args.load_path}...')
         model, step = util.load_model(model, args.load_path, args.gpu_ids)
     else:
         step = 0
