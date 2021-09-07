@@ -136,7 +136,7 @@ def main(args):
 
                 # Forward
                 loss = model.get_training_loss(input_seq, input_masks, input_edge_types, pred_seq)
-                model.kl_weight = 1
+                # model.kl_weight = 1
                 loss_val = loss.item()
 
                 # Backward

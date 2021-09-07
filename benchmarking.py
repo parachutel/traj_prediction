@@ -48,6 +48,7 @@ def predict_lane(frame, sampled_future_trajs, track, tol=0.1):
     '''
     x_error = []
     y_error = []
+    dist_error = []
     votes = []
     init_lane_id = track.lane_ids[frame]
     lane_markings = list(track.upper_lane_markings) + list(track.lower_lane_markings)
@@ -55,8 +56,10 @@ def predict_lane(frame, sampled_future_trajs, track, tol=0.1):
         x_end, y_end = sampled_future_trajs[i][-1]
         _y_error = abs(y_end - track.ys[frame + args.n_pred_steps])
         _x_error = abs(x_end - track.xs[frame + args.n_pred_steps])
+        _d_error = np.sqrt(_x_error ** 2 + _y_error ** 2)
         y_error.append(_y_error)
         x_error.append(_x_error)
+        dist_error.append(_d_error)
 
         pred_lane_id = -1 # for outlier samples
         for k in range(len(lane_markings) - 1):
@@ -73,12 +76,13 @@ def predict_lane(frame, sampled_future_trajs, track, tol=0.1):
         if pred_lane_id not in votes:
             votes.append(pred_lane_id)
 
-    return votes, np.mean(x_error), np.mean(y_error)
+    return votes, np.mean(x_error), np.mean(y_error), np.mean(dist_error)
 
 def eval_lane_pred_accuracy(model, track, device):
     accuracy = [] 
     x_error = []
     y_error = []
+    dist_error = []
     with tqdm(total=len(range(INPUT_SEQ_LEN, track.num_frames - PRED_SEQ_LEN))) as progress_bar:
         for frame in range(INPUT_SEQ_LEN, track.num_frames - PRED_SEQ_LEN):
             input_seq = track.state_tensors[frame - INPUT_SEQ_LEN : frame]
@@ -86,6 +90,7 @@ def eval_lane_pred_accuracy(model, track, device):
             input_edge_types = track.edge_type_tensors[frame - INPUT_SEQ_LEN : frame]
     
             input_seq = torch.tensor(input_seq).float().to(device).unsqueeze(0)
+            input_masks = torch.tensor(input_masks).float().to(device).unsqueeze(0)
             input_edge_types = torch.tensor(input_edge_types).float().to(device).unsqueeze(0)
 
             if args.model == 'cvae':
@@ -101,7 +106,7 @@ def eval_lane_pred_accuracy(model, track, device):
     
             sampled_future_trajs = infer_future_trajs(frame, sampled_vels, track)
             true_future_lane_id = track.lane_ids[frame + PRED_SEQ_LEN]
-            pred_future_lane_id_votes, pred_x_error, pred_y_error = \
+            pred_future_lane_id_votes, pred_x_error, pred_y_error, pred_dist_error = \
                 predict_lane(frame, sampled_future_trajs, track)
     
             # print(true_future_lane_id, pred_future_lane_id, pred_y_error)
@@ -109,6 +114,7 @@ def eval_lane_pred_accuracy(model, track, device):
             accuracy.append(true_future_lane_id in pred_future_lane_id_votes)
             x_error.append(pred_x_error)
             y_error.append(pred_y_error)
+            dist_error.append(pred_dist_error)
     
             progress_bar.update(1)
             progress_bar.set_postfix(frame=frame,
@@ -117,15 +123,17 @@ def eval_lane_pred_accuracy(model, track, device):
     accuracy = sum(accuracy) / len(accuracy) * 100
     y_error = np.mean(y_error)
     x_error = np.mean(x_error)
+    dist_error = np.mean(dist_error)
     print('Lane ID prediction accuracy = {:.3f}%'.format(accuracy))
-    print('Mean prediction x error     = {:.3f} [meter]'.format(x_error))
-    print('Mean prediction y error     = {:.3f} [meter]'.format(y_error))
-    return accuracy, x_error, y_error
+    print('Mean end-point prediction x error     = {:.3f} [meter]'.format(x_error))
+    print('Mean end-point prediction y error     = {:.3f} [meter]'.format(y_error))
+    print('Mean end-point prediction dist error     = {:.3f} [meter]'.format(dist_error))
+    return accuracy, x_error, y_error, dist_error
 
 
 mode = 'lane_pred'
 
-def benchmarking(max_n_eval=20):
+def benchmarking(max_n_eval=10):
     dev_data_list=[14, 38, 23, 31, 20, 26, 32, 33, 17, 3, 27, 57, 49, 25, 55]
     # dev_data_list=[14]
     device, args.gpu_ids = util.get_available_devices()
@@ -158,11 +166,13 @@ def benchmarking(max_n_eval=20):
         'lane_pred_accuracy': [],
         'x_error': [],
         'y_error': [],
+        'dist_error': [],
     }
     units = {
         'lane_pred_accuracy': '%',
         'x_error': '[meter]',
         'y_error': '[meter]',
+        'dist_error': '[meter]',
     }
     # Prepare data
     for idx in range(len(dev_data_list)):
@@ -188,10 +198,11 @@ def benchmarking(max_n_eval=20):
                 track.generate_data_tensors(uuid_to_track)
                 # Not converting to Frenet since we still want to know lane id info
                 # track.convert_xy_to_frenet()
-                lane_pred_accuracy, x_error, y_error = eval_lane_pred_accuracy(model, track, device)
+                lane_pred_accuracy, x_error, y_error, dist_error = eval_lane_pred_accuracy(model, track, device)
                 results['lane_pred_accuracy'].append(lane_pred_accuracy)
                 results['x_error'].append(x_error)
                 results['y_error'].append(y_error)
+                results['dist_error'].append(dist_error)
 
     print('=' * 80)
     print('Benchmarking results:')
@@ -201,4 +212,4 @@ def benchmarking(max_n_eval=20):
 
 
 if __name__ == '__main__':
-    benchmarking()
+    benchmarking(max_n_eval=10)
