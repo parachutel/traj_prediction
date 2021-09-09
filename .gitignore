@@ -8,3 +8,4 @@ save/
 NumCpp/
 build/
 onnxruntime/
+CMakeCache.txt

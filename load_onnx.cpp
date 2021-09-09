@@ -75,5 +75,12 @@ int main(int argc, char* argv[]){
                 outputTensors.data(), 1);
 
     
+    for (int i = 0; i < outputTensors.size(); i++) {
+        float* f = outputTensors[i].GetTensorMutableData<float>();
+        // std::cout << *f << ' ';
+        for (size_t j = 0; j != outputTensorSize; ++j) {
+            std::cout << f[j] << " ";
+        }
+    }
     return 1;
 }
